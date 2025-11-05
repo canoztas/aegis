@@ -1,0 +1,203 @@
+{% extends "base.html" %} {% block title %}aegis - Upload Source Code{% endblock
+%} {% block content %}
+<div class="container py-5">
+  <div class="row justify-content-center mb-5">
+    <div class="col-md-8 text-center">
+      <h1 class="display-4 mb-3">
+        aegis
+      </h1>
+      <p class="lead text-muted">
+        Upload your source code (ZIP format) for comprehensive security
+        vulnerability analysis using advanced Large Language Model technology.
+      </p>
+    </div>
+  </div>
+
+  <div class="row justify-content-center">
+    <div class="col-md-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title mb-4">
+            <i class="bi bi-upload"></i> Upload Source Code
+          </h5>
+
+          <form
+            id="uploadForm"
+            action="{{ url_for('main.upload_file') }}"
+            method="post"
+            enctype="multipart/form-data"
+          >
+            <div id="dropArea" class="upload-area mb-4">
+              <i class="bi bi-cloud-upload fs-1 text-muted mb-3 d-block"></i>
+              <h5>Drop your ZIP file here</h5>
+              <p class="text-muted mb-3">or click to browse files</p>
+              <input
+                type="file"
+                id="fileInput"
+                name="file"
+                accept=".zip"
+                class="form-control"
+                style="display: none"
+                required
+              />
+              <button
+                type="button"
+                id="browseBtn"
+                class="btn btn-outline-primary"
+              >
+                <i class="bi bi-folder2-open"></i> Browse Files
+              </button>
+            </div>
+
+            <div id="fileInfo" class="alert alert-info" style="display: none">
+              <i class="bi bi-file-zip"></i>
+              <strong>Selected file:</strong> <span id="fileName"></span>
+              <br />
+              <small class="text-muted"
+                >Size: <span id="fileSize"></span
+              ></small>
+            </div>
+
+            <div class="d-grid">
+              <button
+                type="submit"
+                id="analyzeBtn"
+                class="btn btn-danger btn-lg"
+                disabled
+              >
+                <i class="bi bi-search"></i> Analyze for Vulnerabilities
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-5">
+    <div class="col-md-4">
+      <div class="text-center">
+        <i class="bi bi-lightning-charge fs-1 text-primary mb-3"></i>
+        <h5>Fast Analysis</h5>
+        <p class="text-muted">
+          Powered by advanced LLM technology for rapid vulnerability detection.
+        </p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="text-center">
+        <i class="bi bi-shield-exclamation fs-1 text-warning mb-3"></i>
+        <h5>Comprehensive Scan</h5>
+        <p class="text-muted">
+          Detects SQL injection, XSS, authentication flaws, and more.
+        </p>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="text-center">
+        <i class="bi bi-graph-up fs-1 text-success mb-3"></i>
+        <h5>Detailed Reports</h5>
+        <p class="text-muted">
+          Get line-by-line analysis with severity scores and recommendations.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="analysisProgress"
+    class="row justify-content-center mt-5"
+    style="display: none"
+  >
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-body text-center">
+          <div class="spinner-border text-danger mb-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+          <h5>Analyzing Your Code...</h5>
+          <p class="text-muted">
+            This may take a few minutes depending on the size of your codebase.
+          </p>
+          <div class="progress">
+            <div
+              class="progress-bar progress-bar-striped progress-bar-animated bg-danger"
+              role="progressbar"
+              style="width: 100%"
+            ></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} {% block scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const dropArea = document.getElementById("dropArea");
+    const fileInput = document.getElementById("fileInput");
+    const browseBtn = document.getElementById("browseBtn");
+    const analyzeBtn = document.getElementById("analyzeBtn");
+    const fileInfo = document.getElementById("fileInfo");
+    const fileName = document.getElementById("fileName");
+    const fileSize = document.getElementById("fileSize");
+    const uploadForm = document.getElementById("uploadForm");
+    const analysisProgress = document.getElementById("analysisProgress");
+
+    browseBtn.addEventListener("click", () => fileInput.click());
+
+    dropArea.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropArea.classList.add("dragover");
+    });
+
+    dropArea.addEventListener("dragleave", () => {
+      dropArea.classList.remove("dragover");
+    });
+
+    dropArea.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropArea.classList.remove("dragover");
+
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        fileInput.files = files;
+        handleFileSelect(files[0]);
+      }
+    });
+
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files.length > 0) {
+        handleFileSelect(e.target.files[0]);
+      }
+    });
+
+    function handleFileSelect(file) {
+      if (file.type === "application/zip" || file.name.endsWith(".zip")) {
+        fileName.textContent = file.name;
+        fileSize.textContent = formatFileSize(file.size);
+        fileInfo.style.display = "block";
+        analyzeBtn.disabled = false;
+      } else {
+        alert("Please select a ZIP file.");
+        fileInput.value = "";
+        fileInfo.style.display = "none";
+        analyzeBtn.disabled = true;
+      }
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes === 0) return "0 Bytes";
+      const k = 1024;
+      const sizes = ["Bytes", "KB", "MB", "GB"];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+    }
+
+    uploadForm.addEventListener("submit", function () {
+      analysisProgress.style.display = "block";
+      analyzeBtn.disabled = true;
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+[project]
+name = "aegis"
+version = "0.1.0"
+description = "SAST Security Analysis Tool using LLMs"
+authors = [
+    { name = "Developer", email = "dev@example.com" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+    "flask>=3.0.0",
+    "werkzeug>=3.0.0",
+    "requests>=2.31.0",
+    "python-magic>=0.4.27",
+    "zipfile36>=0.1.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+line-length = 88
+target-version = ['py39']
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
