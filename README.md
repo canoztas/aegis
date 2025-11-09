@@ -1,4 +1,7 @@
-# aegis - AI Powered Security Analysis Tool
+<div align="center">
+  <img src="aegis/static/img/aegis-logo.svg" alt="aegis logo" width="200"/>
+  <h1>aegis - AI Powered Security Analysis Tool</h1>
+</div>
 
 aegis is an AI-powered Static Application Security Testing (SAST) tool that uses Large Language Models (LLMs) via Ollama to analyze source code for security vulnerabilities. It provides comprehensive vulnerability detection with detailed reports.
 
@@ -11,7 +14,7 @@ aegis leverages multiple AI models working in parallel to identify security vuln
 - **Multi-Model Analysis**: Execute scans using multiple AI models simultaneously for comprehensive coverage
 - **Consensus Engine**: Combines findings from multiple models using various consensus strategies (union, majority vote, weighted vote, judge model)
 - **CWE-Aware Detection**: Automatically focuses on relevant Common Weakness Enumeration (CWE) vulnerability types based on the programming language
-- **Modern Web Interface**: Clean, intuitive UI with dark mode support and VSCode-inspired code snippet visualization
+- **Web Interface**: User-friendly interface with dark mode support and integrated code snippet visualization for vulnerability context
 - **Code Context Display**: Shows vulnerable code snippets with context lines and severity-based highlighting
 - **Industry-Standard Exports**: Export results in SARIF format for integration with CI/CD pipelines
 - **Flexible Model Support**: Compatible with local (Ollama) and cloud-based LLM providers
