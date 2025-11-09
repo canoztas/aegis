@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  aegis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aegis
+    ports:
+      - "5000:5000"
+    volumes:
+      # Mount config directory for model configuration
+      - ./config:/app/config
+      # Mount data directory for CWE data
+      - ./data:/app/data
+      # Mount uploads directory (optional, for persistent storage)
+      - ./uploads:/app/uploads
+    environment:
+      - FLASK_ENV=production
+      - HOST=0.0.0.0
+      - PORT=5000
+      # Ollama configuration (if using local Ollama)
+      - OLLAMA_BASE_URL=http://ollama:11434
+    networks:
+      - aegis-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Ollama service for local model execution
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - aegis-network
+    restart: unless-stopped
+    # Uncomment if you want Ollama to start automatically
+    # profiles:
+    #   - ollama
+
+networks:
+  aegis-network:
+    driver: bridge
+
+volumes:
+  ollama-data:
+

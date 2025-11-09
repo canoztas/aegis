@@ -11,7 +11,7 @@ if __name__ == "__main__":
     app = create_app()
 
     host = os.environ.get("HOST", "127.0.0.1")
-    port = int(os.environ.get("PORT", 7766))
+    port = int(os.environ.get("PORT", 5000))
     debug = os.environ.get("FLASK_ENV") == "development"
 
     print(f"Starting aegis on http://{host}:{port}")
