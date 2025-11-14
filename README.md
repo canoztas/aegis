@@ -29,27 +29,7 @@ aegis leverages multiple AI models working in parallel to identify security vuln
 
 ### Setup
 
-#### Option 1: Docker (Recommended)
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/canoztas/aegis
-   cd aegis
-   ```
-
-2. Build and run with Docker Compose:
-   ```bash
-   docker-compose up -d
-   ```
-
-3. Access the web interface at `http://localhost:5000`
-
-   To include Ollama for local models:
-   ```bash
-   docker-compose --profile ollama up -d
-   ```
-
-#### Option 2: Manual Installation
+####  Manual Installation
 
 1. Clone the repository:
    ```bash
