@@ -18,6 +18,8 @@ dependencies = [
     "torch>=2.0.0",
     "onnxruntime>=1.15.0",
     "pyyaml>=6.0",
+    "aiohttp>=3.9.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.optional-dependencies]

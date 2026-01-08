@@ -88,3 +88,38 @@ def get_severity_color(severity: str) -> str:
 
 def format_score(score: float) -> str:
     return f"{score:.1f}/10.0"
+
+
+def detect_language(file_path: str) -> str:
+    """Detect programming language from file extension."""
+    extension_map = {
+        "py": "python",
+        "js": "javascript",
+        "ts": "typescript",
+        "jsx": "javascript",
+        "tsx": "typescript",
+        "java": "java",
+        "cpp": "cpp",
+        "c": "c",
+        "cs": "csharp",
+        "php": "php",
+        "rb": "ruby",
+        "go": "go",
+        "rs": "rust",
+        "sql": "sql",
+        "sh": "bash",
+        "bash": "bash",
+        "ps1": "powershell",
+        "html": "html",
+        "css": "css",
+        "vue": "vue",
+        "swift": "swift",
+        "kt": "kotlin",
+        "scala": "scala",
+    }
+
+    if "." in file_path:
+        extension = file_path.rsplit(".", 1)[1].lower()
+        return extension_map.get(extension, "unknown")
+
+    return "unknown"

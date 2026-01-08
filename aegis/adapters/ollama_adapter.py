@@ -15,7 +15,17 @@ class OllamaAdapter(AbstractAdapter):
         model_name: str,
         base_url: str = "http://localhost:11434",
         display_name: Optional[str] = None,
+        connector: Optional[Any] = None,
     ):
+        """
+        Initialize Ollama adapter.
+
+        Args:
+            model_name: Ollama model name
+            base_url: Ollama API base URL
+            display_name: Display name for the model
+            connector: Optional OllamaConnector instance for rate limiting/retry
+        """
         adapter_id = f"ollama:{model_name}"
         super().__init__(
             adapter_id=adapter_id,
@@ -26,57 +36,66 @@ class OllamaAdapter(AbstractAdapter):
         )
         self.model_name = model_name
         self.base_url = base_url.rstrip("/")
+        self.connector = connector  # Optional: provides rate limiting, retry, circuit breaker
 
     def predict(self, request: ModelRequest) -> ModelResponse:
         """Run prediction using Ollama API."""
         start_time = time.time()
-        
+
         try:
             # Build prompt from request
             prompt = request.code_context
-            
-            # Use chat API for better JSON mode support
-            url = f"{self.base_url}/api/chat"
-            payload = {
-                "model": self.model_name,
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a security scanner. Output only valid JSON matching the provided schema. No commentary."
+
+            # Use connector if available (provides rate limiting, retry, circuit breaker)
+            if self.connector:
+                result = self.connector.generate(
+                    prompt=prompt,
+                    model=self.model_name,
+                    temperature=0.1,
+                )
+                raw_response = result.get("text", "")
+            else:
+                # Fallback to direct API call (legacy behavior)
+                url = f"{self.base_url}/api/chat"
+                payload = {
+                    "model": self.model_name,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a security scanner. Output only valid JSON matching the provided schema. No commentary."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.1,
+                        "top_p": 0.9,
                     },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                "stream": False,
-                "options": {
-                    "temperature": 0.1,
-                    "top_p": 0.9,
-                },
-                "format": "json"  # Request JSON format
-            }
+                    "format": "json"  # Request JSON format
+                }
 
-            response = requests.post(
-                url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=request.timeout,
-            )
-            response.raise_for_status()
+                response = requests.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=request.timeout,
+                )
+                response.raise_for_status()
+                result = response.json()
+                raw_response = result.get("message", {}).get("content", "")
 
-            result = response.json()
-            raw_response = result.get("message", {}).get("content", "")
-            
             # Parse JSON response
             findings = self._parse_response(raw_response, request.file_path)
-            
+
             latency_ms = int((time.time() - start_time) * 1000)
-            
+
             return ModelResponse(
                 model_id=self.id,
                 findings=findings,
-                usage=result.get("eval_count", {}),
+                usage={},
                 raw=raw_response,
                 latency_ms=latency_ms,
             )

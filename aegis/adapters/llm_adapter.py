@@ -15,9 +15,23 @@ class LLMAdapter(AbstractAdapter):
         provider: str,
         model_name: str,
         api_key: str,
-        api_base: Optional[str] = None,
+        base_url: Optional[str] = None,
+        api_base: Optional[str] = None,  # Deprecated: use base_url
         display_name: Optional[str] = None,
+        connector: Optional[Any] = None,
     ):
+        """
+        Initialize LLM adapter.
+
+        Args:
+            provider: Provider name (openai, anthropic, etc.)
+            model_name: Model name
+            api_key: API key
+            base_url: API base URL (preferred)
+            api_base: API base URL (deprecated, use base_url)
+            display_name: Display name for the model
+            connector: Optional OpenAIConnector instance for rate limiting/retry
+        """
         adapter_id = f"{provider}:{model_name}"
         super().__init__(
             adapter_id=adapter_id,
@@ -28,7 +42,9 @@ class LLMAdapter(AbstractAdapter):
         )
         self.model_name = model_name
         self.api_key = api_key
-        self.api_base = api_base or self._get_default_base(provider)
+        # Support both base_url (new) and api_base (legacy)
+        self.api_base = base_url or api_base or self._get_default_base(provider)
+        self.connector = connector  # Optional: provides rate limiting, retry, circuit breaker
 
     def _get_default_base(self, provider: str) -> str:
         """Get default API base URL for provider."""

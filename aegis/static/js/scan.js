@@ -172,8 +172,8 @@ document.getElementById("scanForm").addEventListener("submit", async function(e)
       progressDiv.style.display = "none";
       document.getElementById("scanBtn").disabled = false;
     } else {
-      // Redirect to scan detail page
-      window.location.href = `/scan/${data.scan_id}`;
+      // Redirect to real-time progress page
+      window.location.href = `/scan/${data.scan_id}/progress`;
     }
   } catch (error) {
     alert("Error starting scan: " + error.message);

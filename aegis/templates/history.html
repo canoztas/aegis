@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% block title %}Scan History - aegis{% endblock %}
+{% block content %}
+<div class="container py-5">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h2><i class="bi bi-clock-history"></i> Scan History</h2>
+          <p class="text-muted mb-0">View your past security scans</p>
+        </div>
+        <div>
+          <button id="clearAllBtn" class="btn btn-outline-danger me-2" style="display: none;">
+            <i class="bi bi-trash"></i> Clear All
+          </button>
+          <a href="{{ url_for('main.index') }}" class="btn btn-danger">
+            <i class="bi bi-plus-circle"></i> New Scan
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3">Loading scan history...</p>
+  </div>
+
+  <div id="historyContent" style="display: none;">
+    <div class="row mb-3">
+      <div class="col-md-6">
+        <input
+          type="text"
+          id="searchInput"
+          class="form-control"
+          placeholder="Search by scan ID or filename..."
+        />
+      </div>
+      <div class="col-md-6 text-end">
+        <select id="filterStatus" class="form-select d-inline-block w-auto">
+          <option value="">All Status</option>
+          <option value="completed">Completed</option>
+          <option value="running">Running</option>
+          <option value="pending">Pending</option>
+          <option value="failed">Failed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="scansTable"></div>
+
+    <div id="noScans" class="text-center py-5" style="display: none;">
+      <i class="bi bi-inbox fs-1 text-muted mb-3 d-block"></i>
+      <h5>No Scans Found</h5>
+      <p class="text-muted">Start your first security scan to see results here.</p>
+      <a href="{{ url_for('main.index') }}" class="btn btn-danger mt-2">
+        <i class="bi bi-plus-circle"></i> Start First Scan
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let allScans = [];
+
+  async function loadScans() {
+    try {
+      const response = await fetch('/api/scans?limit=100');
+      const data = await response.json();
+      allScans = data.scans || [];
+
+      if (allScans.length === 0) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('noScans').style.display = 'block';
+        document.getElementById('clearAllBtn').style.display = 'none';
+        return;
+      }
+
+      displayScans(allScans);
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('historyContent').style.display = 'block';
+      document.getElementById('clearAllBtn').style.display = 'inline-block';
+    } catch (error) {
+      console.error('Error loading scans:', error);
+      document.getElementById('loading').innerHTML = `
+        <div class="alert alert-danger">
+          <i class="bi bi-exclamation-triangle"></i>
+          Failed to load scan history. Please try again.
+        </div>
+      `;
+    }
+  }
+
+  function displayScans(scans) {
+    const container = document.getElementById('scansTable');
+
+    if (scans.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-5">
+          <i class="bi bi-search fs-1 text-muted mb-3 d-block"></i>
+          <h5>No scans match your filters</h5>
+        </div>
+      `;
+      return;
+    }
+
+    const html = scans.map(scan => {
+      const statusBadge = getStatusBadge(scan.status);
+      const severityBadges = getSeverityBadges(scan.severity_counts);
+      const timestamp = formatTimestamp(scan.created_at || scan.started_at);
+      const duration = calculateDuration(scan.started_at, scan.completed_at);
+
+      const actionButtons = getActionButtons(scan.scan_id, scan.status);
+
+      // Determine the correct URL based on status
+      const scanUrl = (scan.status === 'running' || scan.status === 'pending')
+        ? `/scan/${scan.scan_id}/progress`
+        : `/scan/${scan.scan_id}`;
+
+      // Show upload filename if available
+      const displayName = scan.upload_filename
+        ? `<div class="text-muted small"><i class="bi bi-file-earmark-zip"></i> ${scan.upload_filename}</div>`
+        : '';
+
+      return `
+        <div class="card mb-3 hover-shadow">
+          <div class="card-body">
+            <div class="row align-items-center">
+              <div class="col-md-3" style="cursor: pointer;" onclick="window.location.href='${scanUrl}'">
+                <h6 class="mb-1">
+                  <code class="text-primary">${scan.scan_id.substring(0, 8)}</code>
+                </h6>
+                ${displayName}
+                <small class="text-muted">
+                  <i class="bi bi-clock"></i> ${timestamp}
+                </small>
+              </div>
+              <div class="col-md-2" style="cursor: pointer;" onclick="window.location.href='${scanUrl}'">
+                ${statusBadge}
+                ${duration ? `<br><small class="text-muted">${duration}</small>` : ''}
+              </div>
+              <div class="col-md-1" style="cursor: pointer;" onclick="window.location.href='${scanUrl}'">
+                <div class="text-muted small">Files</div>
+                <div class="fw-bold">${scan.total_files}</div>
+              </div>
+              <div class="col-md-1" style="cursor: pointer;" onclick="window.location.href='${scanUrl}'">
+                <div class="text-muted small">Findings</div>
+                <div class="fw-bold">${scan.total_findings}</div>
+              </div>
+              <div class="col-md-3" style="cursor: pointer;" onclick="window.location.href='${scanUrl}'">
+                <div class="text-muted small mb-1">Severity Breakdown</div>
+                ${severityBadges}
+              </div>
+              <div class="col-md-2 text-end">
+                ${actionButtons}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    container.innerHTML = html;
+  }
+
+  function getStatusBadge(status) {
+    const badges = {
+      'completed': '<span class="badge bg-success">Completed</span>',
+      'pending': '<span class="badge bg-warning">Pending</span>',
+      'failed': '<span class="badge bg-danger">Failed</span>',
+      'running': '<span class="badge bg-info">Running</span>',
+      'cancelled': '<span class="badge bg-secondary">Cancelled</span>',
+    };
+    return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
+  }
+
+  function getActionButtons(scanId, status) {
+    const buttons = [];
+
+    // Retry button for failed or cancelled scans
+    if (status === 'failed' || status === 'cancelled') {
+      buttons.push(`
+        <button class="btn btn-sm btn-outline-primary me-1" onclick="event.stopPropagation(); retryScan('${scanId}');" title="Retry scan">
+          <i class="bi bi-arrow-clockwise"></i>
+        </button>
+      `);
+    }
+
+    // Delete button for all scans except running
+    if (status !== 'running' && status !== 'pending') {
+      buttons.push(`
+        <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deleteScan('${scanId}');" title="Delete scan">
+          <i class="bi bi-trash"></i>
+        </button>
+      `);
+    }
+
+    return buttons.join('');
+  }
+
+  async function deleteScan(scanId) {
+    if (!confirm('Are you sure you want to delete this scan? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/scan/${scanId}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Remove from UI
+        allScans = allScans.filter(s => s.scan_id !== scanId);
+        displayScans(allScans);
+
+        // Show success message
+        alert('Scan deleted successfully');
+      } else {
+        alert(`Failed to delete scan: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`Error deleting scan: ${error.message}`);
+    }
+  }
+
+  async function retryScan(scanId) {
+    if (!confirm('This will create a new scan with the same configuration. Continue?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/scan/${scanId}/retry`, {
+        method: 'POST'
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        alert('Scan retry started! Redirecting to progress page...');
+        window.location.href = `/scan/${data.scan_id}/progress`;
+      } else {
+        alert(`Failed to retry scan: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`Error retrying scan: ${error.message}`);
+    }
+  }
+
+  async function clearAllHistory() {
+    const count = allScans.length;
+    if (!confirm(`Are you sure you want to delete ALL ${count} scan(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/scans/clear', {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Clear UI
+        allScans = [];
+        document.getElementById('historyContent').style.display = 'none';
+        document.getElementById('noScans').style.display = 'block';
+        document.getElementById('clearAllBtn').style.display = 'none';
+
+        // Show success message
+        alert(data.message || 'All scans deleted successfully');
+      } else {
+        alert(`Failed to clear history: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      alert(`Error clearing history: ${error.message}`);
+    }
+  }
+
+  function getSeverityBadges(counts) {
+    const badges = [];
+    if (counts.critical > 0) {
+      badges.push(`<span class="badge bg-dark me-1">${counts.critical} Critical</span>`);
+    }
+    if (counts.high > 0) {
+      badges.push(`<span class="badge bg-danger me-1">${counts.high} High</span>`);
+    }
+    if (counts.medium > 0) {
+      badges.push(`<span class="badge bg-warning text-dark me-1">${counts.medium} Medium</span>`);
+    }
+    if (counts.low > 0) {
+      badges.push(`<span class="badge bg-success me-1">${counts.low} Low</span>`);
+    }
+    return badges.length > 0 ? badges.join('') : '<span class="text-muted">No findings</span>';
+  }
+
+  function formatTimestamp(timestamp) {
+    if (!timestamp) return 'Unknown';
+
+    // Parse timestamp - handle both ISO strings and timestamps with 'Z' or without
+    let date;
+    if (timestamp.endsWith('Z') || timestamp.includes('+')) {
+      // UTC timestamp
+      date = new Date(timestamp);
+    } else {
+      // Assume UTC if no timezone specified
+      date = new Date(timestamp + 'Z');
+    }
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      date = new Date(timestamp); // Fallback to original parsing
+    }
+
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+  }
+
+  function calculateDuration(start, end) {
+    if (!start || !end) return null;
+    const startTime = new Date(start);
+    const endTime = new Date(end);
+    const diffMs = endTime - startTime;
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+
+    if (diffSecs < 60) return `${diffSecs}s`;
+    if (diffMins < 60) return `${diffMins}m ${diffSecs % 60}s`;
+    const hours = Math.floor(diffMins / 60);
+    return `${hours}h ${diffMins % 60}m`;
+  }
+
+  function filterScans() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const statusFilter = document.getElementById('filterStatus').value;
+
+    const filtered = allScans.filter(scan => {
+      // Search in scan ID and upload filename
+      const matchesSearch = !searchTerm ||
+        scan.scan_id.toLowerCase().includes(searchTerm) ||
+        (scan.upload_filename && scan.upload_filename.toLowerCase().includes(searchTerm));
+      const matchesStatus = !statusFilter || scan.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+
+    displayScans(filtered);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    loadScans();
+
+    document.getElementById('searchInput').addEventListener('input', filterScans);
+    document.getElementById('filterStatus').addEventListener('change', filterScans);
+    document.getElementById('clearAllBtn').addEventListener('click', clearAllHistory);
+  });
+</script>
+
+<style>
+  .hover-shadow {
+    transition: box-shadow 0.2s ease-in-out;
+  }
+
+  .hover-shadow:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+  }
+</style>
+{% endblock %}
