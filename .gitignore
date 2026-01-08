@@ -71,6 +71,8 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+test_*.py
+test_project/
 
 # Security
 .env
