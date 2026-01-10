@@ -1,5 +1,6 @@
 """Factory helpers for creating provider instances based on ModelRecord."""
 
+import asyncio
 import os
 from typing import Any, Dict
 
@@ -63,6 +64,54 @@ class OpenAICompatibleProvider:
             **opts,
         )
         return result.get("text", "") if isinstance(result, dict) else str(result)
+
+
+class CloudProviderAdapter:
+    """Adapter for cloud API providers (OpenAI, Anthropic, Google) with sync interface."""
+
+    def __init__(self, provider: Any, settings: Dict[str, Any]):
+        """
+        Initialize cloud provider adapter.
+
+        Args:
+            provider: Async provider instance (OpenAIProvider, AnthropicProvider, GoogleProvider)
+            settings: Model settings
+        """
+        self.provider = provider
+        self.settings = settings or {}
+
+    def generate(self, prompt: str, system_prompt: str = None, **kwargs) -> str:
+        """
+        Generate completion synchronously (wraps async provider).
+
+        Args:
+            prompt: User prompt
+            system_prompt: System prompt
+            **kwargs: Additional generation parameters
+
+        Returns:
+            Generated text
+        """
+        opts = {
+            "temperature": self.settings.get("temperature", 0.1),
+            "max_tokens": self.settings.get("max_tokens", 2048),
+            "top_p": self.settings.get("top_p", 1.0),
+        }
+        opts.update(kwargs)
+
+        # Run async generate in sync context
+        return asyncio.run(
+            self.provider.generate(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                **opts,
+            )
+        )
+
+    def close(self):
+        """Close provider resources."""
+        if hasattr(self.provider, "close"):
+            self.provider.close()
 
 
 def create_provider(model: ModelRecord) -> Any:
@@ -134,5 +183,62 @@ def create_provider(model: ModelRecord) -> Any:
             provider_type=model.provider_id or "openai",
         )
         return OpenAICompatibleProvider(connector, model.model_name, settings)
+
+    # Cloud providers (OpenAI, Anthropic, Google)
+    if model.model_type == ModelType.OPENAI_CLOUD:
+        from aegis.providers.openai_provider import OpenAIProvider
+
+        api_key = (
+            settings.get("api_key")
+            or provider_cfg.get("api_key")
+            or os.environ.get("OPENAI_API_KEY")
+        )
+        return CloudProviderAdapter(
+            OpenAIProvider(
+                model_name=model.model_name,
+                api_key=api_key,
+                base_url=settings.get("base_url"),
+                organization=settings.get("organization"),
+                timeout=settings.get("timeout", 120),
+                max_retries=settings.get("max_retries", 3),
+            ),
+            settings,
+        )
+
+    if model.model_type == ModelType.ANTHROPIC_CLOUD:
+        from aegis.providers.anthropic_provider import AnthropicProvider
+
+        api_key = (
+            settings.get("api_key")
+            or provider_cfg.get("api_key")
+            or os.environ.get("ANTHROPIC_API_KEY")
+        )
+        return CloudProviderAdapter(
+            AnthropicProvider(
+                model_name=model.model_name,
+                api_key=api_key,
+                base_url=settings.get("base_url"),
+                timeout=settings.get("timeout", 120),
+                max_retries=settings.get("max_retries", 3),
+            ),
+            settings,
+        )
+
+    if model.model_type == ModelType.GOOGLE_CLOUD:
+        from aegis.providers.google_provider import GoogleProvider
+
+        api_key = (
+            settings.get("api_key")
+            or provider_cfg.get("api_key")
+            or os.environ.get("GOOGLE_API_KEY")
+        )
+        return CloudProviderAdapter(
+            GoogleProvider(
+                model_name=model.model_name,
+                api_key=api_key,
+                timeout=settings.get("timeout", 120),
+            ),
+            settings,
+        )
 
     raise ProviderCreationError(f"Unsupported model type: {model.model_type}")

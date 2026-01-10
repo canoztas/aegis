@@ -11,6 +11,11 @@ async function loadScanResults() {
     const data = await response.json();
 
     if (data.error) {
+      const status = await getScanStatus(scanId);
+      if (status === "running" || status === "pending") {
+        window.location.href = `/scan/${scanId}/progress`;
+        return;
+      }
       showError("Error: " + data.error);
       return;
     }
@@ -19,6 +24,17 @@ async function loadScanResults() {
   } catch (error) {
     console.error("Error loading scan results:", error);
     showError("Error loading scan results: " + error.message);
+  }
+}
+
+async function getScanStatus(id) {
+  try {
+    const response = await fetch(`/api/scan/${id}/status`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.status || null;
+  } catch (e) {
+    return null;
   }
 }
 

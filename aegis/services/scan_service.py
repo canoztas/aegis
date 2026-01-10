@@ -52,10 +52,22 @@ class ScanService:
             try:
                 self.scan_state.status[scan_id] = "running"
                 emitter.pipeline_started("multi_model_scan", "1.0")
+                if self.use_v2:
+                    scan_repo, _ = self.get_v2_repositories()
+                    try:
+                        scan_repo.update_status(scan_id, "running")
+                    except Exception as e:
+                        print(f"Warning: Failed to mark scan running in database: {e}")
 
                 if self._is_cancelled(scan_id):
                     self.scan_state.status[scan_id] = "cancelled"
                     emitter.emit("cancelled", {"message": "Scan cancelled before execution"})
+                    if self.use_v2:
+                        scan_repo, _ = self.get_v2_repositories()
+                        try:
+                            scan_repo.update_status(scan_id, "cancelled")
+                        except Exception as e:
+                            print(f"Warning: Failed to mark scan cancelled in database: {e}")
                     return
 
                 registry = ModelRegistryV2()
@@ -118,6 +130,12 @@ class ScanService:
                 if self._is_cancelled(scan_id):
                     self.scan_state.status[scan_id] = "cancelled"
                     emitter.emit("cancelled", {"message": "Scan cancelled"})
+                    if self.use_v2:
+                        scan_repo, _ = self.get_v2_repositories()
+                        try:
+                            scan_repo.update_status(scan_id, "cancelled")
+                        except Exception as e:
+                            print(f"Warning: Failed to mark scan cancelled in database: {e}")
                     return
 
                 self.scan_state.results[scan_id] = scan_result
@@ -153,5 +171,11 @@ class ScanService:
             except Exception as e:
                 self.scan_state.status[scan_id] = "failed"
                 emitter.error(str(e))
+                if self.use_v2:
+                    scan_repo, _ = self.get_v2_repositories()
+                    try:
+                        scan_repo.update_status(scan_id, "failed", error=str(e))
+                    except Exception as err:
+                        print(f"Warning: Failed to mark scan failed in database: {err}")
             finally:
                 self.scan_state.cancel_events.pop(scan_id, None)

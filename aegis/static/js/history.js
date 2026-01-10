@@ -9,6 +9,14 @@ document.addEventListener("DOMContentLoaded", () => {
             filterHistory(e.target.value);
         });
     }
+
+    // Auto-refresh history while idle (shows running/completed scans)
+    setInterval(() => {
+        if (document.hidden) return;
+        const query = searchInput?.value?.trim();
+        if (query) return;
+        loadScanHistory();
+    }, 10000);
 });
 
 let allScans = [];
@@ -65,6 +73,9 @@ function createScanCard(scan) {
     const col = document.createElement("div");
     col.className = "col-12";
 
+    const isActive = scan.status === 'running' || scan.status === 'pending';
+    const targetUrl = isActive ? `/scan/${scan.scan_id}/progress` : `/scan/${scan.scan_id}`;
+
     // Status Badge
     let statusBadge = '';
     let statusBorder = 'border-secondary';
@@ -89,7 +100,7 @@ function createScanCard(scan) {
     const timestamp = scan.created_at ? new Date(scan.created_at).toLocaleString() : 'UNKNOWN_DATE';
 
     col.innerHTML = `
-        <div class="card bg-panel ${statusBorder} shadow-sm rounded-0 transition-all cursor-pointer group" onclick="if(!event.target.closest('button')) window.location.href='/scan/${scan.scan_id}'">
+        <div class="card bg-panel ${statusBorder} shadow-sm rounded-0 transition-all cursor-pointer group" onclick="if(!event.target.closest('button')) window.location.href='${targetUrl}'">
             <div class="card-body p-3 d-flex align-items-center flex-wrap gap-3">
                 <!-- ID & Date -->
                 <div class="flex-grow-1">
@@ -138,10 +149,10 @@ function createScanCard(scan) {
     // View Button
     const viewBtn = document.createElement("button");
     viewBtn.className = "btn btn-icon btn-sm text-secondary hover-text-primary transition-colors";
-    viewBtn.innerHTML = '<i class="bi bi-chevron-right"></i>';
+    viewBtn.innerHTML = isActive ? '<i class="bi bi-play-fill"></i>' : '<i class="bi bi-chevron-right"></i>';
     viewBtn.onclick = (e) => {
         e.stopPropagation();
-        window.location.href = `/scan/${scan.scan_id}`;
+        window.location.href = targetUrl;
     };
     actionContainer.appendChild(viewBtn);
 

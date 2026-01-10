@@ -872,6 +872,32 @@ def list_scans() -> Any:
             "created_at": None
         })
 
+    # Add pending/running scans from in-memory status (if not already listed)
+    existing_ids = {s.get("scan_id") for s in scans}
+    for scan_id, status in _scan_status.items():
+        if scan_id in existing_ids:
+            continue
+
+        scan_data = None
+        if _use_v2:
+            try:
+                scan_repo, _ = get_v2_repositories()
+                scan_data = scan_repo.get_by_scan_id(scan_id)
+            except Exception as e:
+                print(f"Warning: Failed to load scan {scan_id} from database: {e}")
+
+        scans.append({
+            "scan_id": scan_id,
+            "status": status,
+            "consensus_strategy": (scan_data or {}).get("consensus_strategy", "unknown"),
+            "total_files": (scan_data or {}).get("total_files", 0),
+            "total_findings": 0,
+            "severity_counts": {"low": 0, "medium": 0, "high": 0, "critical": 0},
+            "started_at": (scan_data or {}).get("started_at"),
+            "completed_at": (scan_data or {}).get("completed_at"),
+            "created_at": (scan_data or {}).get("created_at"),
+        })
+
     # Sort by created_at (most recent first), handling None values
     scans.sort(key=lambda x: x.get('created_at') or '', reverse=True)
 

@@ -10,7 +10,10 @@ class ModelType(str, Enum):
     """Canonical model types supported by Aegis."""
     OLLAMA_LOCAL = "ollama_local"
     HF_LOCAL = "hf_local"
-    OPENAI_COMPATIBLE = "openai_compatible"  # Stub for future
+    OPENAI_COMPATIBLE = "openai_compatible"  # Custom OpenAI-compatible endpoints
+    OPENAI_CLOUD = "openai_cloud"  # Official OpenAI API (GPT-4, GPT-3.5-Turbo)
+    ANTHROPIC_CLOUD = "anthropic_cloud"  # Anthropic API (Claude 3)
+    GOOGLE_CLOUD = "google_cloud"  # Google Generative AI (Gemini)
     TOOL_ML = "tool_ml"  # Classic/legacy ML tools (SySeVR, etc.)
 
 
