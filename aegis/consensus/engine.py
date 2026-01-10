@@ -1,7 +1,7 @@
 """Consensus engine for merging findings from multiple models."""
 import hashlib
 from typing import Dict, List, Literal, Optional, Any
-from aegis.models import Finding, ModelResponse
+from aegis.data_models import Finding, ModelResponse
 from aegis.prompt_builder import PromptBuilder
 
 
@@ -152,7 +152,7 @@ class ConsensusEngine:
             )
 
             # Create judge request
-            from aegis.models import ModelRequest
+            from aegis.data_models import ModelRequest
 
             judge_request = ModelRequest(
                 code_context=prompt,

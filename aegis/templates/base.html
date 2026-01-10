@@ -1,298 +1,124 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>
-      {% block title %}aegis - AI Powered Security Analysis Tool{% endblock %}
-    </title>
+<html lang="en" data-theme="dark">
 
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css"
-      rel="stylesheet"
-    />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-mode.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/code-snippet.css') }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Aegis of the Vulnerable{% endblock %}</title>
 
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/aegis-icon.svg') }}">
-    <style>
-      .navbar-brand {
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      
-      .navbar-brand img {
-        height: 32px;
-        width: 32px;
-      }
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet" />
 
-      .vulnerability-card {
-        border-left: 4px solid;
-        margin-bottom: 1rem;
-      }
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+    rel="stylesheet">
 
-      .vulnerability-card.severity-low {
-        border-left-color: #28a745;
-      }
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/code-snippet.css') }}">
 
-      .vulnerability-card.severity-medium {
-        border-left-color: #ffc107;
-      }
+  {% block head %}{% endblock %}
+</head>
 
-      .vulnerability-card.severity-high {
-        border-left-color: #fd7e14;
-      }
-
-      .vulnerability-card.severity-critical {
-        border-left-color: #dc3545;
-      }
-
-      .code-snippet {
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 0.375rem;
-        padding: 0.75rem;
-        font-family: var(--font-mono, 'JetBrains Mono'), 'Courier New', monospace;
-        font-size: 0.875rem;
-        white-space: pre-wrap;
-      }
-
-      .upload-area {
-        border: 2px dashed #dee2e6;
-        border-radius: 0.5rem;
-        padding: 3rem;
-        text-align: center;
-        transition: all 0.3s ease;
-      }
-
-      .upload-area:hover {
-        border-color: #adb5bd;
-        background-color: #f8f9fa;
-      }
-
-      .upload-area.dragover {
-        border-color: #0d6efd;
-        background-color: #e7f3ff;
-      }
-      
-      /* Dark mode overrides for inline styles */
-      html[data-theme="dark"] .code-snippet,
-      body[data-theme="dark"] .code-snippet {
-        background-color: var(--bg-tertiary);
-        border-color: var(--border-color);
-        color: var(--text-primary);
-      }
-      
-      html[data-theme="dark"] .upload-area,
-      body[data-theme="dark"] .upload-area {
-        border-color: var(--border-color);
-        background-color: var(--bg-secondary);
-      }
-      
-      html[data-theme="dark"] .upload-area:hover,
-      body[data-theme="dark"] .upload-area:hover {
-        border-color: var(--accent-color);
-        background-color: var(--bg-tertiary);
-      }
-      
-      html[data-theme="dark"] .upload-area.dragover,
-      body[data-theme="dark"] .upload-area.dragover {
-        border-color: var(--accent-color);
-        background-color: rgba(88, 166, 255, 0.1);
-      }
-      
-      /* Navbar - dark by default */
-      .navbar-custom {
-        background-color: var(--bg-secondary, #252526) !important;
-        border-bottom: 1px solid var(--border-color, #3c3c3c);
-      }
-      
-      html[data-theme="dark"] .navbar-custom,
-      body[data-theme="dark"] .navbar-custom {
-        background-color: var(--bg-secondary) !important;
-        border-bottom: 1px solid var(--border-color);
-      }
-      
-      /* Light mode navbar override */
-      html[data-theme="light"] .navbar-custom,
-      body[data-theme="light"] .navbar-custom {
-        background-color: #f6f8fa !important;
-        border-bottom: 1px solid #d0d7de;
-      }
-      
-      /* Footer - dark by default */
-      .footer-custom {
-        background-color: var(--bg-secondary, #252526);
-        border-top: 1px solid var(--border-color, #3c3c3c);
-      }
-      
-      html[data-theme="dark"] .footer-custom,
-      body[data-theme="dark"] .footer-custom {
-        background-color: var(--bg-secondary) !important;
-        border-top: 1px solid var(--border-color) !important;
-      }
-      
-      /* Light mode footer override */
-      html[data-theme="light"] .footer-custom,
-      body[data-theme="light"] .footer-custom {
-        background-color: #f6f8fa !important;
-        border-top: 1px solid #d0d7de !important;
-      }
-    </style>
-
-    {% block head %}{% endblock %}
-  </head>
-  <body>
-    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom">
-      <div class="container">
-        <a class="navbar-brand" href="{{ url_for('main.index') }}">
-          <img src="{{ url_for('static', filename='img/aegis-icon.svg') }}" alt="Aegis Logo">
-          <span>aegis</span>
-        </a>
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarNav"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav ms-auto">
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.index') }}">New Scan</a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.models_page') }}">Models</a>
-            </li>
-            <li class="nav-item">
-              <button class="btn btn-link nav-link" id="themeToggle" style="border: none; background: none; color: inherit;">
-                <i class="bi bi-moon-stars" id="themeIcon"></i>
-              </button>
-            </li>
-          </ul>
-        </div>
+<body class="d-flex flex-column min-vh-100">
+  <nav class="navbar navbar-expand-lg border-bottom border-subtle bg-panel sticky-top"
+    style="backdrop-filter: blur(10px); background-color: rgba(15, 18, 22, 0.95);">
+    <div class="container-fluid px-4" style="max-width: 1600px;">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.index') }}">
+        <img src="{{ url_for('static', filename='img/aegis-icon.svg') }}" alt="Aegis Logo" width="32" height="32"
+          style="filter: drop-shadow(0 0 5px rgba(44,140,127,0.5));">
+        <span class="fw-bold tracking-tight text-light font-monospace"
+          style="letter-spacing: 0.15em; font-size: 1.25rem;">AEGIS</span>
+      </a>
+      <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto align-items-center gap-1">
+          <li class="nav-item">
+            <a class="nav-link px-4 {% if request.endpoint == 'main.index' %}active text-primary{% endif %}"
+              href="{{ url_for('main.index') }}">
+              SCAN
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link px-4 {% if request.endpoint == 'main.models_page' %}active text-primary{% endif %}"
+              href="{{ url_for('main.models_page') }}">
+              MODELS
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link px-4 {% if request.endpoint == 'main.history_page' %}active text-primary{% endif %}"
+              href="{{ url_for('main.history_page') }}">
+              HISTORY
+            </a>
+          </li>
+        </ul>
       </div>
-    </nav>
-
-    {% with messages = get_flashed_messages() %} {% if messages %}
-    <div class="container mt-3">
-      {% for message in messages %}
-      <div class="alert alert-warning alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="alert"
-        ></button>
-      </div>
-      {% endfor %}
     </div>
-    {% endif %} {% endwith %}
+  </nav>
 
-    <main>{% block content %}{% endblock %}</main>
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages() %} {% if messages %}
+  <div class="container mt-4 animate-delay-1 fade-in">
+    {% for message in messages %}
+    <div
+      class="alert alert-info border-primary bg-panel shadow-sm d-flex align-items-center rounded-0 font-monospace small text-primary"
+      role="alert" style="border-left-width: 4px;">
+      <i class="bi bi-info-circle-fill me-3"></i>
+      <div>{{ message }}</div>
+      <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %} {% endwith %}
 
-    <footer class="footer-custom py-4 mt-5">
-      <div class="container text-center">
-        <p class="text-muted mb-0">aegis - 2025</p>
-      </div>
-    </footer>
+  <main class="flex-grow-1">
+    {% block content %}{% endblock %}
+  </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-      // Dark mode toggle - initialize immediately (before page renders)
-      (function() {
-        'use strict';
-        const html = document.documentElement;
-        const body = document.body;
-        
-        // Load saved theme or default to dark (darker tones)
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        
-        // Apply theme immediately
-        html.setAttribute('data-theme', savedTheme);
-        body.setAttribute('data-theme', savedTheme);
-        
-        // Force CSS variable application - default to dark VSCode-like theme
-        if (savedTheme === 'dark' || !localStorage.getItem('theme')) {
-          html.style.setProperty('--bg-primary', '#1e1e1e');
-          html.style.setProperty('--bg-secondary', '#252526');
-          html.style.setProperty('--bg-tertiary', '#2d2d30');
-          html.style.setProperty('--text-primary', '#d4d4d4');
-          html.style.setProperty('--text-secondary', '#858585');
-          html.style.setProperty('--border-color', '#3c3c3c');
-        } else {
-          // Light mode (brighter)
-          html.style.setProperty('--bg-primary', '#ffffff');
-          html.style.setProperty('--bg-secondary', '#f6f8fa');
-          html.style.setProperty('--bg-tertiary', '#f0f0f0');
-          html.style.setProperty('--text-primary', '#24292f');
-          html.style.setProperty('--text-secondary', '#57606a');
-          html.style.setProperty('--border-color', '#d0d7de');
-        }
-        
-        // Wait for DOM to be ready
-        if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', initTheme);
-        } else {
-          initTheme();
-        }
-        
-        function initTheme() {
-          // Update icon if it exists
-          const themeIcon = document.getElementById('themeIcon');
-          if (themeIcon) {
-            themeIcon.className = savedTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
-          }
-          
-          // Set up toggle if button exists
-          const themeToggle = document.getElementById('themeToggle');
-          if (themeToggle) {
-            themeToggle.addEventListener('click', function() {
-              const currentTheme = html.getAttribute('data-theme');
-              const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-              
-              html.setAttribute('data-theme', newTheme);
-              body.setAttribute('data-theme', newTheme);
-              localStorage.setItem('theme', newTheme);
-              
-              // Update CSS variables - dark is VSCode-like, light is bright
-              if (newTheme === 'dark') {
-                html.style.setProperty('--bg-primary', '#1e1e1e');
-                html.style.setProperty('--bg-secondary', '#252526');
-                html.style.setProperty('--bg-tertiary', '#2d2d30');
-                html.style.setProperty('--text-primary', '#d4d4d4');
-                html.style.setProperty('--text-secondary', '#858585');
-                html.style.setProperty('--border-color', '#3c3c3c');
-              } else {
-                html.style.setProperty('--bg-primary', '#ffffff');
-                html.style.setProperty('--bg-secondary', '#f6f8fa');
-                html.style.setProperty('--bg-tertiary', '#f0f0f0');
-                html.style.setProperty('--text-primary', '#24292f');
-                html.style.setProperty('--text-secondary', '#57606a');
-                html.style.setProperty('--border-color', '#d0d7de');
-              }
-              
-              if (themeIcon) {
-                themeIcon.className = newTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
-              }
-            });
-          }
-        }
-      })();
-    </script>
+  <footer class="mt-auto py-3 border-top border-subtle bg-panel">
+    <div class="container-fluid px-4 d-flex justify-content-between align-items-center text-muted small"
+      style="max-width: 1600px;">
+      <span class="font-monospace">&copy; 2025 AEGIS OF THE VULNERABLE</span>
+      <span class="font-monospace text-secondary opacity-50">V.2.1-TACTICAL</span>
+    </div>
+  </footer>
 
-    {% block scripts %}{% endblock %}
-  </body>
+  {% block modals %}{% endblock %}
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <style>
+    .nav-link {
+      color: var(--text-secondary);
+      font-family: var(--font-monospace);
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+
+    .nav-link:hover {
+      color: var(--brand-hover);
+      text-shadow: 0 0 10px var(--brand-glow);
+    }
+
+    .nav-link.active {
+      color: var(--brand-primary);
+    }
+
+    .navbar-toggler-icon {
+      filter: invert(1);
+    }
+  </style>
+
+  {% block scripts %}{% endblock %}
+</body>
+
 </html>

@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Any
-from aegis.models import ModelRequest
+from aegis.data_models import ModelRequest
 
 
 class PromptBuilder:

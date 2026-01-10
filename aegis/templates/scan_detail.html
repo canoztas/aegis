@@ -1,97 +1,397 @@
-{% extends "base.html" %} {% block title %}Scan Results - aegis{% endblock %} {%
-block content %}
-<div class="container py-5">
+{% extends "base.html" %}
+{% block title %}Battle Report - Aegis{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 fade-in">
+  <!-- Header Section -->
   <div class="row mb-4">
     <div class="col-12">
-      <div class="d-flex justify-content-between align-items-center">
+      <div class="d-flex justify-content-between align-items-center border-bottom border-primary pb-3 mb-4">
         <div>
-          <h2><i class="bi bi-clipboard-data"></i> Scan Results</h2>
-          <p class="text-muted mb-0">Scan ID: <code id="scanId">{{ scan_id }}</code></p>
+          <h2 class="fw-bold mb-2 text-uppercase"
+            style="letter-spacing: 0.15em; text-shadow: 0 0 15px var(--brand-glow);">
+            <i class="bi bi-shield-shaded me-2 text-primary"></i> BATTLE REPORT
+          </h2>
+          <div class="d-flex align-items-center gap-3 mt-2">
+            <div class="d-flex align-items-center gap-2 font-monospace">
+              <span class="text-uppercase small text-muted">OPERATION_ID:</span>
+              <code id="scanId" class="bg-black border border-subtle px-2 py-1 small text-primary">{{ scan_id }}</code>
+            </div>
+            <div id="scanStatus" class="d-flex align-items-center gap-2 font-monospace small"></div>
+          </div>
         </div>
-        <div>
-          <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary">
-            <i class="bi bi-arrow-left"></i> New Scan
+        <div class="d-flex gap-2">
+          <div class="dropdown">
+            <button class="btn btn-sm btn-outline-primary dropdown-toggle font-monospace text-uppercase" type="button"
+              data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-download me-2"></i> EXPORT_INTEL
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow bg-black border border-subtle">
+              <li>
+                <button class="dropdown-item text-muted" onclick="exportSARIF()">
+                  <i class="bi bi-filetype-json me-2 text-primary"></i> SARIF Format
+                </button>
+              </li>
+              <li>
+                <button class="dropdown-item text-muted" onclick="exportCSV()">
+                  <i class="bi bi-filetype-csv me-2 text-success"></i> CSV Matrix
+                </button>
+              </li>
+              <li>
+                <hr class="dropdown-divider border-secondary">
+              </li>
+              <li>
+                <button class="dropdown-item text-muted" onclick="exportJSON()">
+                  <i class="bi bi-code-slash me-2 text-warning"></i> Raw JSON
+                </button>
+              </li>
+            </ul>
+          </div>
+          <a href="{{ url_for('main.index') }}" class="btn btn-sm btn-primary">
+            <i class="bi bi-plus-lg me-1"></i> NEW_SCAN
           </a>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Loading State -->
   <div id="loading" class="text-center py-5">
-    <div class="spinner-border text-primary" role="status">
+    <div class="spinner-border text-primary mb-3" role="status" style="width: 4rem; height: 4rem; border-width: 5px;">
       <span class="visually-hidden">Loading...</span>
     </div>
-    <p class="mt-3">Loading scan results...</p>
+    <h4 class="text-muted fw-normal font-monospace">
+      <span class="blink">&gt;</span> ANALYZING_THREAT_LANDSCAPE...
+    </h4>
   </div>
 
+  <!-- Main Content -->
   <div id="scanContent" style="display: none;">
-    <!-- Summary Cards -->
-    <div class="row mb-4" id="summaryCards"></div>
-
-    <!-- Tabs -->
-    <ul class="nav nav-tabs mb-4" id="resultsTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link active"
-          id="consensus-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#consensus"
-          type="button"
-          role="tab"
-        >
-          Consensus Findings
-        </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link"
-          id="per-model-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#per-model"
-          type="button"
-          role="tab"
-        >
-          Per-Model Findings
-        </button>
-      </li>
-    </ul>
-
-    <div class="tab-content" id="resultsTabsContent">
-      <!-- Consensus Findings -->
-      <div class="tab-pane fade show active" id="consensus" role="tabpanel">
-        <div id="consensusFindings"></div>
-      </div>
-
-      <!-- Per-Model Findings -->
-      <div class="tab-pane fade" id="per-model" role="tabpanel">
-        <div id="perModelFindings"></div>
-      </div>
+    <!-- Threat Overview Dashboard -->
+    <div class="row g-3 mb-4" id="threatOverview">
+      <!-- Populated by JS -->
     </div>
 
-    <!-- Export -->
-    <div class="row mt-4">
+    <!-- Main Intelligence Panel -->
+    <div class="row">
       <div class="col-12">
-        <div class="card">
-          <div class="card-body">
-            <h6 class="card-title">
-              <i class="bi bi-download"></i> Export Results
-            </h6>
-            <button class="btn btn-outline-primary me-2" onclick="exportSARIF()">
-              <i class="bi bi-filetype-json"></i> Export as SARIF
-            </button>
-            <button class="btn btn-outline-secondary me-2" onclick="exportCSV()">
-              <i class="bi bi-filetype-csv"></i> Export as CSV
-            </button>
-            <button class="btn btn-outline-secondary" onclick="exportJSON()">
-              <i class="bi bi-filetype-json"></i> Export as JSON
-            </button>
+        <div class="card border-0 shadow-lg" style="border: 1px solid var(--border-subtle);">
+          <!-- Tab Navigation -->
+          <div class="card-header bg-black border-bottom border-subtle pt-3 pb-0 px-4">
+            <ul class="nav nav-pills" id="intelTabs" role="tablist">
+              <li class="nav-item me-2" role="presentation">
+                <button class="nav-link active rounded-0 border-0 text-uppercase font-monospace small px-4 py-2"
+                  id="consensus-tab" data-bs-toggle="tab" data-bs-target="#consensus" type="button" role="tab"
+                  style="letter-spacing: 0.08em; background: var(--brand-primary); color: #fff;">
+                  <i class="bi bi-crosshair me-2"></i> CONSENSUS_INTEL
+                </button>
+              </li>
+              <li class="nav-item me-2" role="presentation">
+                <button class="nav-link rounded-0 border-0 text-uppercase font-monospace small px-4 py-2"
+                  id="per-model-tab" data-bs-toggle="tab" data-bs-target="#per-model" type="button" role="tab"
+                  style="letter-spacing: 0.08em; color: var(--text-muted);">
+                  <i class="bi bi-cpu me-2"></i> RAW_SIGNALS
+                </button>
+              </li>
+            </ul>
+          </div>
+
+          <div class="card-body p-0 bg-panel">
+            <div class="tab-content" id="intelTabsContent">
+              <!-- Consensus Findings -->
+              <div class="tab-pane fade show active" id="consensus" role="tabpanel">
+                <div id="consensusFindings" class="p-4"></div>
+              </div>
+
+              <!-- Per-Model Findings -->
+              <div class="tab-pane fade" id="per-model" role="tabpanel">
+                <div id="perModelFindings" class="p-4"></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </div>
 </div>
-{% endblock %} {% block scripts %}
-<script src="{{ url_for('static', filename='js/scan_detail.js') }}"></script>
 {% endblock %}
 
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/scan_detail.js') }}"></script>
+<style>
+  /* Custom Tab Styling */
+  #intelTabs .nav-link {
+    transition: all 0.3s ease;
+  }
+
+  #intelTabs .nav-link:not(.active) {
+    background: transparent;
+  }
+
+  #intelTabs .nav-link:not(.active):hover {
+    background: rgba(61, 104, 255, 0.1);
+    color: var(--brand-primary) !important;
+  }
+
+  #intelTabs .nav-link.active {
+    background: var(--brand-primary);
+    color: #fff !important;
+    box-shadow: 0 0 10px var(--brand-glow);
+  }
+
+  /* Vulnerability Cards */
+  .vuln-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .vuln-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: var(--severity-color);
+    transition: width 0.3s ease;
+  }
+
+  .vuln-card:hover::before {
+    width: 8px;
+  }
+
+  .vuln-card:hover {
+    border-color: var(--severity-color);
+    box-shadow: 0 0 15px rgba(61, 104, 255, 0.1);
+    transform: translateX(3px);
+  }
+
+  .vuln-card.severity-critical::before {
+    background: #7c3aed;
+  }
+
+  .vuln-card.severity-high::before {
+    background: var(--status-danger);
+  }
+
+  .vuln-card.severity-medium::before {
+    background: var(--status-warning);
+  }
+
+  .vuln-card.severity-low::before {
+    background: var(--status-success);
+  }
+
+  /* Code Snippet Styling */
+  .code-box {
+    background: #000;
+    border: 1px solid var(--border-subtle);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 1rem;
+  }
+
+  .code-box-header {
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0.5rem 1rem;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .code-box-content {
+    padding: 0;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .code-line {
+    display: flex;
+    align-items: stretch;
+    min-height: 1.5rem;
+    line-height: 1.5rem;
+  }
+
+  .code-line-number {
+    background: var(--bg-surface);
+    color: var(--text-muted);
+    padding: 0 1rem;
+    text-align: right;
+    min-width: 4rem;
+    user-select: none;
+    border-right: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+  }
+
+  .code-line-content {
+    padding: 0 1rem;
+    color: #e0e0e0;
+    flex: 1;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .code-line.context {
+    background: #000;
+  }
+
+  .code-line.vuln {
+    background: rgba(239, 68, 68, 0.15);
+    border-left: 3px solid var(--status-danger);
+  }
+
+  .code-line.vuln .code-line-number {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--status-danger);
+    font-weight: bold;
+  }
+
+  /* Threat Cards */
+  .threat-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 1.5rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .threat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--threat-color);
+  }
+
+  .threat-card:hover {
+    border-color: var(--threat-color);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transform: translateY(-3px);
+  }
+
+  .threat-card .threat-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--threat-color);
+    filter: drop-shadow(0 0 10px var(--threat-color));
+  }
+
+  .threat-card .threat-value {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--text-main);
+    font-family: var(--font-mono);
+  }
+
+  .threat-card .threat-label {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+  }
+
+  /* Empty State */
+  .empty-state {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-muted);
+  }
+
+  .empty-state i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    color: var(--status-success);
+    filter: drop-shadow(0 0 15px var(--status-success));
+  }
+
+  /* Severity Badges */
+  .severity-badge {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    padding: 0.35rem 0.7rem;
+    border-radius: 2px;
+    text-transform: uppercase;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+  }
+
+  .severity-badge.critical {
+    background: rgba(124, 58, 237, 0.2);
+    color: #a78bfa;
+    border: 1px solid #7c3aed;
+  }
+
+  .severity-badge.high {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+    border: 1px solid var(--status-danger);
+  }
+
+  .severity-badge.medium {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid var(--status-warning);
+  }
+
+  .severity-badge.low {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    border: 1px solid var(--status-success);
+  }
+
+  /* Model Card in Per-Model View */
+  .model-intel-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    margin-bottom: 2rem;
+    overflow: hidden;
+  }
+
+  .model-intel-header {
+    background: var(--bg-panel);
+    border-bottom: 2px solid var(--border-subtle);
+    padding: 1rem 1.5rem;
+  }
+
+  .model-intel-body {
+    padding: 1.5rem;
+  }
+
+  /* Scrollbar Styling */
+  .code-box-content::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .code-box-content::-webkit-scrollbar-track {
+    background: #000;
+  }
+
+  .code-box-content::-webkit-scrollbar-thumb {
+    background: var(--border-subtle);
+    border-radius: 4px;
+  }
+
+  .code-box-content::-webkit-scrollbar-thumb:hover {
+    background: var(--brand-primary);
+  }
+</style>
+{% endblock %}

@@ -1,139 +1,189 @@
-/* Code snippet display with severity highlighting - VSCode-like dark theme */
+/* ===================================
+   CODE SNIPPET DISPLAY
+   Matches Dota 2 / Aegis Theme
+   =================================== */
+
 .code-snippet-container {
   margin-top: 1rem;
-  border-radius: 0.5rem;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid #3c3c3c;
-  background-color: #1e1e1e; /* VSCode dark background */
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-html[data-theme="dark"] .code-snippet-container,
-body[data-theme="dark"] .code-snippet-container {
-  background-color: #1e1e1e;
-  border-color: #3c3c3c;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-void, #000);
+  box-shadow: 0 0 0 1px var(--border-subtle), 0 4px 12px rgba(0, 0, 0, 0.8);
 }
 
 .code-snippet-header {
   padding: 0.5rem 1rem;
-  background-color: #252526; /* VSCode header background */
-  border-bottom: 1px solid #3c3c3c;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #cccccc; /* VSCode text color */
-}
-
-html[data-theme="dark"] .code-snippet-header,
-body[data-theme="dark"] .code-snippet-header {
-  background-color: #252526;
-  border-bottom-color: #3c3c3c;
-  color: #cccccc;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .code-snippet-content {
   overflow-x: auto;
-  font-family: var(--font-mono, 'JetBrains Mono'), 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 0.875rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
   line-height: 1.6;
   margin: 0;
   padding: 0;
-  background-color: #1e1e1e; /* VSCode dark background */
+  background-color: var(--bg-void, #000);
+  max-height: 500px;
+  overflow-y: auto;
 }
 
 .code-snippet-line {
   display: flex;
-  padding: 0.25rem 1rem;
+  padding: 0.25rem 0;
   border-left: 3px solid transparent;
-  transition: background-color 0.2s ease;
-  background-color: #1e1e1e;
+  transition: background-color 0.15s ease;
+  background-color: var(--bg-void, #000);
 }
 
 .code-snippet-line:hover {
-  background-color: #2a2d2e; /* VSCode hover color */
-}
-
-html[data-theme="dark"] .code-snippet-line:hover,
-body[data-theme="dark"] .code-snippet-line:hover {
-  background-color: #2a2d2e;
+  background-color: var(--bg-surface);
 }
 
 .code-snippet-line-number {
   display: inline-block;
-  width: 3rem;
+  min-width: 3.5rem;
   text-align: right;
-  padding-right: 1rem;
-  color: #858585; /* VSCode line number color */
+  padding: 0 1rem;
+  color: var(--text-muted);
   user-select: none;
   flex-shrink: 0;
-  font-weight: 400;
+  font-weight: 500;
+  background-color: var(--bg-deep, #0a0a0f);
+  border-right: 1px solid var(--border-subtle);
 }
 
 .code-snippet-code {
   flex: 1;
   white-space: pre;
-  color: #d4d4d4; /* VSCode default text color */
+  color: var(--text-secondary);
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
-/* Severity-based line highlighting - VSCode dark theme */
+/* Severity-based line highlighting - Dota 2 Theme */
 .code-snippet-line.severity-critical {
-  background-color: rgba(248, 81, 73, 0.2) !important;
-  border-left-color: #f85149 !important;
+  background-color: rgba(220, 38, 38, 0.15) !important;
+  border-left-color: #dc2626 !important;
   border-left-width: 4px;
+}
+
+.code-snippet-line.severity-critical .code-snippet-line-number {
+  background-color: rgba(220, 38, 38, 0.2);
+  color: #dc2626;
+  font-weight: bold;
+}
+
+.code-snippet-line.severity-critical .code-snippet-code {
+  color: var(--text-main);
 }
 
 .code-snippet-line.severity-high {
-  background-color: rgba(255, 107, 107, 0.18) !important;
-  border-left-color: #ff6b6b !important;
+  background-color: rgba(251, 146, 60, 0.15) !important;
+  border-left-color: #fb923c !important;
   border-left-width: 4px;
+}
+
+.code-snippet-line.severity-high .code-snippet-line-number {
+  background-color: rgba(251, 146, 60, 0.2);
+  color: #fb923c;
+  font-weight: bold;
+}
+
+.code-snippet-line.severity-high .code-snippet-code {
+  color: var(--text-main);
 }
 
 .code-snippet-line.severity-medium {
-  background-color: rgba(210, 153, 34, 0.18) !important;
-  border-left-color: #d29922 !important;
+  background-color: rgba(251, 191, 36, 0.15) !important;
+  border-left-color: #fbbf24 !important;
   border-left-width: 4px;
+}
+
+.code-snippet-line.severity-medium .code-snippet-line-number {
+  background-color: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+  font-weight: bold;
+}
+
+.code-snippet-line.severity-medium .code-snippet-code {
+  color: var(--text-main);
 }
 
 .code-snippet-line.severity-low {
-  background-color: rgba(63, 185, 80, 0.18) !important;
-  border-left-color: #3fb950 !important;
+  background-color: rgba(34, 197, 94, 0.15) !important;
+  border-left-color: #22c55e !important;
   border-left-width: 4px;
 }
 
-html[data-theme="dark"] .code-snippet-line.severity-critical,
-body[data-theme="dark"] .code-snippet-line.severity-critical {
-  background-color: rgba(248, 81, 73, 0.25) !important;
-  border-left-color: #f85149 !important;
+.code-snippet-line.severity-low .code-snippet-line-number {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+  font-weight: bold;
 }
 
-html[data-theme="dark"] .code-snippet-line.severity-high,
-body[data-theme="dark"] .code-snippet-line.severity-high {
-  background-color: rgba(255, 107, 107, 0.22) !important;
-  border-left-color: #ff6b6b !important;
-}
-
-html[data-theme="dark"] .code-snippet-line.severity-medium,
-body[data-theme="dark"] .code-snippet-line.severity-medium {
-  background-color: rgba(210, 153, 34, 0.22) !important;
-  border-left-color: #d29922 !important;
-}
-
-html[data-theme="dark"] .code-snippet-line.severity-low,
-body[data-theme="dark"] .code-snippet-line.severity-low {
-  background-color: rgba(63, 185, 80, 0.22) !important;
-  border-left-color: #3fb950 !important;
+.code-snippet-line.severity-low .code-snippet-code {
+  color: var(--text-main);
 }
 
 /* Context lines (non-vulnerable) */
 .code-snippet-line.context {
-  background-color: #1e1e1e;
-  opacity: 0.8;
-  color: #858585;
+  background-color: var(--bg-void, #000);
+  opacity: 0.75;
 }
 
-html[data-theme="dark"] .code-snippet-line.context,
-body[data-theme="dark"] .code-snippet-line.context {
-  background-color: #1e1e1e;
-  opacity: 0.7;
-  color: #858585;
+.code-snippet-line.context .code-snippet-code {
+  color: var(--text-muted);
 }
 
+.code-snippet-line.context .code-snippet-line-number {
+  color: var(--text-tertiary, #64748b);
+}
+
+/* Custom Scrollbar for Code Snippets */
+.code-snippet-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.code-snippet-content::-webkit-scrollbar-track {
+  background: var(--bg-deep, #0a0a0f);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.code-snippet-content::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 0;
+}
+
+.code-snippet-content::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-primary);
+  box-shadow: 0 0 8px rgba(44, 140, 127, 0.5);
+}
+
+/* Syntax Highlighting Hints (minimal, tactical) */
+.code-snippet-code .keyword {
+  color: #7dd3fc;
+  font-weight: 600;
+}
+
+.code-snippet-code .string {
+  color: #22c55e;
+}
+
+.code-snippet-code .comment {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.code-snippet-code .function {
+  color: #fbbf24;
+}

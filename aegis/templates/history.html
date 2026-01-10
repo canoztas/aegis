@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Log Archive{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width: 1200px;">
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h3 class="fw-bold text-light mb-1">Mission Archives</h3>
+      <p class="text-secondary small font-monospace">OP_LOGS // BATTLE_RECORDS</p>
+    </div>
+  </div>
+
+  <!-- Search & Filter -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="input-group bg-panel border-subtle shadow-sm rounded-0">
+        <span class="input-group-text bg-panel border-subtle text-secondary border-end-0 rounded-0"><i
+            class="bi bi-search"></i></span>
+        <input type="text"
+          class="form-control bg-panel border-subtle border-start-0 text-light py-2 font-monospace small shadow-none"
+          placeholder="SEARCH_LOG_ID..." id="searchHistory">
+        <button class="btn btn-outline-secondary border-subtle rounded-0 text-light hover-bg-surface" type="button"
+          onclick="loadScanHistory()">
+          REFRESH
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- History List -->
+  <div id="scanHistoryList" class="row g-3">
+    <!-- Populated by JS -->
+    <!-- Default Loader -->
+    <div id="historyLoader" class="text-center py-5">
+      <div class="spinner-border text-primary mb-3" role="status"></div>
+      <div class="font-monospace text-secondary small">DECRYPTING_ARCHIVES...</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/history.js') }}"></script>
+<script>
+  // Force refresh on load to ensure loader disappears if JS fails for some reason
+  // Although history.js usually handles this, adding a failsafe
+  window.addEventListener('load', () => {
+    // history.js calls loadScanHistory on DOMContentLoaded, we just ensure UI is clean
+  });
+</script>
+<style>
+  .hover-bg-surface:hover {
+    background-color: var(--bg-surface);
+  }
+</style>
+{% endblock %}

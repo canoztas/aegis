@@ -3,7 +3,7 @@ import json
 import csv
 from typing import List, Dict, Any
 from datetime import datetime
-from aegis.models import Finding, ScanResult
+from aegis.data_models import Finding, ScanResult
 
 
 def export_sarif(scan_result: ScanResult, base_uri: str = "file:///") -> Dict[str, Any]:

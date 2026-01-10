@@ -1,128 +1,248 @@
-:root {
-  --primary-color: #dc3545;
-  --secondary-color: #6c757d;
-  --success-color: #28a745;
-  --warning-color: #ffc107;
-  --danger-color: #dc3545;
-  --info-color: #17a2b8;
-}
+/* ===================================
+   AEGIS - TACTICAL OPS EXTENDED
+   =================================== */
 
+/* Override Bootstrap Defaults for Dark Theme */
 body {
-  font-family: var(--font-primary, 'Inter'), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Oxygen", "Ubuntu", "Cantarell", sans-serif;
-  line-height: 1.6;
-  color: var(--text-primary, #333);
-  font-weight: 400;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.navbar-brand {
-  font-weight: 800;
-  font-size: 1.5rem;
-  letter-spacing: -0.5px;
-  font-family: var(--font-primary, 'Inter'), sans-serif;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.navbar-brand img {
-  height: 40px;
-  width: auto;
-}
-
-.btn {
-  font-weight: 500;
-  border-radius: 0.5rem;
-  transition: all 0.2s ease-in-out;
-}
-
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-app);
+  color: var(--text-main);
 }
 
 .card {
+  background-color: var(--bg-panel);
+  /* Fix: Override Bootstrap white */
+  color: var(--text-main);
+  border-radius: var(--panel-radius);
+  border: 1px solid var(--border-subtle);
+}
+
+.modal-content {
+  background-color: var(--bg-panel);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
+}
+
+.form-control,
+.form-select {
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-main) !important;
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: var(--bg-surface) !important;
+  color: var(--text-main) !important;
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 0.25rem var(--brand-glow) !important;
+}
+
+/* Fix List Groups (The source of the white background issue) */
+.list-group-item {
+  background-color: var(--bg-panel);
+  border-color: var(--border-subtle);
+  color: var(--text-main);
+}
+
+/* Tab Fixes */
+.nav-tabs {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.nav-tabs .nav-link {
+  color: var(--text-secondary);
   border: none;
-  border-radius: 1rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  transition: all 0.2s;
+}
+
+.nav-tabs .nav-link:hover {
+  color: var(--brand-hover);
+  border-color: transparent;
+  isolation: isolate;
+  /* Fix z-index issues */
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--brand-primary);
+  background-color: transparent !important;
+  /* No white background */
+  border-bottom: 2px solid var(--brand-primary);
+}
+
+/* Button & Interactives */
+.btn-check:focus+.btn,
+.btn:focus {
+  box-shadow: 0 0 0 0.25rem var(--brand-glow);
+}
+
+/* AEGIS DOTA THEME EXTRAS */
+
+/* Text: Aegis Gold Gradient */
+.text-aegis-gold {
+  background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 10px rgba(191, 149, 63, 0.3);
+}
+
+/* Button: Dota 2 Clash Gradient (Red/Gold/Dark) */
+.btn-aegis-dota {
+  background: linear-gradient(135deg, #5b1212 0%, #8a2424 50%, #b38728 100%);
+  border: 1px solid #b38728;
+  color: #ffd700;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(255, 215, 0, 0.1);
   transition: all 0.3s ease;
-}
-
-.card:hover {
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.12);
-}
-
-.upload-area {
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.upload-area:hover {
-  transform: scale(1.02);
-}
-
-.vulnerability-card {
-  border-radius: 0.75rem !important;
+  position: relative;
   overflow: hidden;
 }
 
-.vulnerability-card .card-header {
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
+.btn-aegis-dota:hover:not(:disabled) {
+  background: linear-gradient(135deg, #751a1a 0%, #a32e2e 50%, #d4a035 100%);
+  box-shadow: 0 0 20px rgba(179, 135, 40, 0.4), inset 0 0 15px rgba(255, 215, 0, 0.2);
+  color: #fff;
+  transform: translateY(-1px);
 }
 
-.code-snippet {
-  max-height: 200px;
-  overflow-y: auto;
-  border-radius: 0.5rem;
-  font-family: var(--font-mono, 'JetBrains Mono'), 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-weight: 500;
+.btn-aegis-dota:disabled {
+  background: #1a1a1a;
+  border-color: #333;
+  color: #555;
+  box-shadow: none;
 }
 
-.badge {
-  font-weight: 600;
-  font-size: 0.75em;
-  padding: 0.5em 0.75em;
+/* Animations */
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
 }
 
-.spinner-border {
-  width: 3rem;
-  height: 3rem;
-}
-
-@media print {
-  .navbar,
-  .btn,
-  footer,
-  .no-print {
-    display: none !important;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
   }
 
-  body {
-    font-size: 12pt;
-    color: #000;
-  }
-
-  .card {
-    border: 1px solid #000;
-    box-shadow: none;
-    break-inside: avoid;
-    margin-bottom: 1rem;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@media (max-width: 768px) {
-  .container {
-    padding-left: 15px;
-    padding-right: 15px;
+.blink {
+  animation: blink 2s infinite;
+}
+
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
   }
 
-  .display-4 {
-    font-size: 2rem;
+  50% {
+    opacity: 0.5;
   }
+}
 
-  .card-body {
-    padding: 1rem;
+/* ===================================
+   UTILITY CLASSES
+   =================================== */
+
+/* Cursor Utilities */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Font Size Utilities */
+.extra-small {
+  font-size: 0.75rem;
+}
+
+.tracking-wider {
+  letter-spacing: 0.1em;
+}
+
+/* Border Hover States */
+.hover-border-primary:hover {
+  border-color: var(--brand-primary) !important;
+}
+
+.hover-border-danger:hover {
+  border-color: var(--brand-secondary) !important;
+}
+
+/* Background Hover States */
+.hover-bg-surface:hover {
+  background-color: var(--bg-surface) !important;
+}
+
+/* Text Hover States */
+.hover-text-primary:hover {
+  color: var(--brand-primary) !important;
+}
+
+.hover-text-danger:hover {
+  color: var(--brand-secondary) !important;
+}
+
+/* Transition Utilities */
+.transition-all {
+  transition: all 0.3s ease;
+}
+
+.transition-colors {
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Icon Button */
+.btn-icon {
+  background: transparent;
+  border: none;
+  padding: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: var(--bg-surface);
+  border-radius: 2px;
+}
+
+/* Group Hover Effects (for parent hover states) */
+.group {
+  position: relative;
+}
+
+/* Status Indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.active {
+  background: var(--brand-primary);
+  box-shadow: 0 0 10px var(--brand-primary);
+  animation: pulse 2s infinite;
+}
+
+.status-dot.inactive {
+  background: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
   }
 }

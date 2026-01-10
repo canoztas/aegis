@@ -82,6 +82,98 @@ aegis leverages multiple AI models working in parallel to identify security vuln
 5. Review findings with code snippets and detailed vulnerability information
 6. Export results in SARIF or CSV format if needed
 
+### Model Discovery & Registry
+
+Check what Ollama has locally and register models for scanning:
+
+```bash
+# Discover locally installed Ollama models
+curl http://localhost:5000/api/models/discovered/ollama | jq
+
+# Register an Ollama model (persisted in SQLite)
+curl -X POST http://localhost:5000/api/models/registry \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_type": "ollama_local",
+    "provider_id": "ollama",
+    "model_name": "qwen2.5-coder:7b",
+    "display_name": "Qwen 2.5 Coder 7B",
+    "roles": ["deep_scan"],
+    "parser_id": "json_schema",
+    "settings": {"base_url": "http://localhost:11434", "temperature": 0.1}
+  }'
+
+# List all registered models
+curl http://localhost:5000/api/models/registry
+
+# (Optional) Trigger a pull via API or use `ollama pull <name>`
+curl -X POST http://localhost:5000/api/models/ollama/pull \
+  -H "Content-Type: application/json" \
+  -d '{"model_name": "qwen2.5-coder:7b"}'
+
+# Smoke-test a registered model
+curl -X POST http://localhost:5000/api/models/test \
+  -H "Content-Type: application/json" \
+  -d '{"model_id": "ollama:qwen2.5-coder:7b", "prompt": "def add(a,b): return a+b"}'
+```
+
+### Hugging Face Local Models (examples)
+
+Install extras (`pip install transformers torch`) and register the built-in presets:
+
+```bash
+# Register CodeBERT (triage) and CodeAstra (deep scan)
+curl -X POST http://localhost:5000/api/models/hf/register_preset \
+  -H "Content-Type: application/json" \
+  -d '{"preset_id": "codebert_insecure", "display_name": "CodeBERT Triage"}'
+
+curl -X POST http://localhost:5000/api/models/hf/register_preset \
+  -H "Content-Type: application/json" \
+  -d '{"preset_id": "codeastra_7b", "display_name": "CodeAstra Deep"}'
+```
+
+Config-driven examples (`config/models.yaml`):
+
+```yaml
+models:
+  huggingface:
+    models:
+      - model_id: "hf:codebert_insecure"
+        hf_model_id: "mrm8488/codebert-base-finetuned-detect-insecure-code"
+        task_type: "text-classification"
+        display_name: "CodeBERT Insecure Code Detector"
+        roles: ["triage"]
+        parser: "hf_classification"
+        parser_config:
+          positive_labels: ["LABEL_1", "VULNERABLE", "INSECURE"]
+          threshold: 0.5
+
+      - model_id: "hf:codeastra_7b"
+        hf_model_id: "rootxhacker/CodeAstra-7B"
+        task_type: "text-generation"
+        display_name: "CodeAstra 7B"
+        roles: ["deep_scan"]
+        parser: "json_schema"
+        prompt_template: |
+          Analyze the code and return strictly:
+          {"findings":[{"file_path":"{file_path}","line_start":<n>,"line_end":<n>,
+            "snippet":"<code>","cwe":"<cwe or null>","severity":"high|medium|low|info",
+            "confidence":<0-1>,"title":"<short>","category":"<type>",
+            "description":"<details>","recommendation":"<fix>"}]}
+```
+
+Sample pipeline snippet (triage -> deep):
+
+```yaml
+steps:
+  - id: "triage"
+    kind: "role"
+    role: "triage"
+  - id: "deep_scan"
+    kind: "role"
+    role: "deep_scan"
+```
+
 ### API
 
 The application provides RESTful API endpoints for programmatic access:
@@ -90,8 +182,13 @@ The application provides RESTful API endpoints for programmatic access:
 - `GET /api/scan/<scan_id>` - Retrieve scan results
 - `GET /api/scan/<scan_id>/export/sarif` - Export results as SARIF
 - `GET /api/scan/<scan_id>/export/csv` - Export results as CSV
-- `GET /api/models` - List available models
-- `GET /api/models/<model_id>/health` - Check model health status
+- `GET /api/models/discovered/ollama` - List locally discovered Ollama models
+- `GET /api/models/registry` - List registered models (single source of truth)
+- `POST /api/models/registry` - Register/upsert a model (Ollama, HF local, OpenAI-compatible)
+- `POST /api/models/ollama/pull` - Pull an Ollama model (or return CLI instructions)
+- `POST /api/models/test` - Quick smoke-test a registered model
+- `GET /api/models/hf/presets` - List HF presets (CodeBERT, CodeAstra)
+- `POST /api/models/hf/register_preset` - Register an HF preset model
 
 ## Configuration
 

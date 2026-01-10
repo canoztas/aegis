@@ -1,0 +1,882 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Progress - aegis{% endblock %}
+
+{% block head %}
+<style>
+  .progress-container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .progress-header {
+    margin-bottom: 2rem;
+  }
+
+  .progress-main {
+    margin-bottom: 2rem;
+  }
+
+  .progress-bar-container {
+    height: 8px;
+    background-color: var(--bg-tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #58a6ff 0%, #4dabf7 100%);
+    transition: width 0.3s ease;
+    width: 0%;
+  }
+
+  .progress-stats {
+    display: flex;
+    gap: 2rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+
+  .step-indicator {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .step-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+  }
+
+  .step-icon.pending {
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+  }
+
+  .step-icon.running {
+    background-color: #58a6ff;
+    color: white;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .step-icon.completed {
+    background-color: #3fb950;
+    color: white;
+  }
+
+  .step-icon.failed {
+    background-color: #f85149;
+    color: white;
+  }
+
+  .step-icon.skipped {
+    background-color: #8b949e;
+    color: white;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .step-details {
+    flex: 1;
+  }
+
+  .step-name {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .step-meta {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+  }
+
+  .model-panel {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .model-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+
+  .model-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .model-status {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+
+  .model-status.running {
+    background-color: rgba(88, 166, 255, 0.2);
+    color: #58a6ff;
+  }
+
+  .model-status.completed {
+    background-color: rgba(63, 185, 80, 0.2);
+    color: #3fb950;
+  }
+
+  .model-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  .model-stat {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .model-stat-label {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .model-stat-value {
+    font-weight: 600;
+    font-family: var(--font-mono, 'JetBrains Mono'), monospace;
+  }
+
+  .findings-stream {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+
+  .findings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .findings-count {
+    font-weight: 600;
+    color: var(--accent-color);
+  }
+
+  .finding-item {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    background-color: var(--bg-tertiary);
+    border-left: 3px solid;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .finding-item.severity-critical {
+    border-left-color: #f85149;
+  }
+
+  .finding-item.severity-high {
+    border-left-color: #ff8800;
+  }
+
+  .finding-item.severity-medium {
+    border-left-color: #d29922;
+  }
+
+  .finding-item.severity-low {
+    border-left-color: #3fb950;
+  }
+
+  .finding-name {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+
+  .finding-meta {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+
+  .activity-log {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: var(--font-mono, 'JetBrains Mono'), monospace;
+    font-size: 0.75rem;
+  }
+
+  .log-entry {
+    padding: 0.25rem 0;
+    color: var(--text-secondary);
+  }
+
+  .log-entry.info {
+    color: #58a6ff;
+  }
+
+  .log-entry.success {
+    color: #3fb950;
+  }
+
+  .log-entry.warning {
+    color: #d29922;
+  }
+
+  .log-entry.error {
+    color: #f85149;
+  }
+
+  .log-timestamp {
+    color: var(--text-secondary);
+    margin-right: 0.5rem;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.875rem;
+  }
+
+  .status-badge.running {
+    background-color: rgba(88, 166, 255, 0.2);
+    color: #58a6ff;
+  }
+
+  .status-badge.completed {
+    background-color: rgba(63, 185, 80, 0.2);
+    color: #3fb950;
+  }
+
+  .status-badge.failed {
+    background-color: rgba(248, 81, 73, 0.2);
+    color: #f85149;
+  }
+
+  .control-buttons {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text-secondary);
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.75s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4 progress-container">
+  <!-- Header -->
+  <div class="progress-header">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <h2>Scan Progress</h2>
+        <p class="text-muted mb-0">Scan ID: <code id="scanId">{{ scan_id }}</code></p>
+      </div>
+      <div>
+        <span id="statusBadge" class="status-badge running">
+          <span class="spinner"></span>
+          Running
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Overall Progress -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <h5 class="card-title mb-3">Overall Progress</h5>
+      <div class="progress-bar-container">
+        <div id="progressBar" class="progress-bar-fill"></div>
+      </div>
+      <div class="progress-stats">
+        <span><strong id="progressPercent">0</strong>% complete</span>
+        <span id="progressMessage">Initializing...</span>
+        <span id="progressTime">Elapsed: <strong>0s</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Left Column: Steps & Models -->
+    <div class="col-lg-6">
+      <!-- Pipeline Steps -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="card-title mb-3">Pipeline Steps</h5>
+          <div id="stepsContainer">
+            <div class="empty-state">
+              <p>Waiting for pipeline to start...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Model Telemetry -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="card-title mb-3">Model Telemetry</h5>
+          <div id="modelsContainer">
+            <div class="empty-state">
+              <p>No model data yet</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Findings & Log -->
+    <div class="col-lg-6">
+      <!-- Live Findings -->
+      <div class="card mb-4">
+        <div class="card-body p-0">
+          <div class="findings-stream">
+            <div class="findings-header">
+              <h5 class="mb-0">Live Findings</h5>
+              <span class="findings-count"><span id="findingsCount">0</span> findings</span>
+            </div>
+            <div id="findingsContainer">
+              <div class="empty-state">
+                <p>No findings yet</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity Log -->
+      <div class="card">
+        <div class="card-body p-0">
+          <div class="activity-log" id="activityLog">
+            <div class="log-entry info">
+              <span class="log-timestamp">--:--:--</span>
+              <span>Connecting to scan stream...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Control Buttons -->
+  <div class="card mt-4">
+    <div class="card-body">
+      <div class="control-buttons">
+        <a href="{{ url_for('main.index') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Back to Home
+        </a>
+        <button id="viewResultsBtn" class="btn btn-primary" disabled>
+          <i class="bi bi-file-text"></i> View Results
+        </button>
+        <button id="cancelScanBtn" class="btn btn-outline-danger" style="display: none;">
+          <i class="bi bi-x-circle"></i> Cancel Scan
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // SSE Client for Real-Time Progress
+  (function() {
+    'use strict';
+
+    const scanId = '{{ scan_id }}';
+    const startTime = Date.now();
+    let eventSource = null;
+    let findingsCount = 0;
+    let steps = {};
+    let models = {};
+
+    // Initialize SSE connection
+    function initSSE() {
+      const url = `/api/scan/${scanId}/stream`;
+      eventSource = new EventSource(url);
+
+      // Event handlers
+      eventSource.addEventListener('connected', handleConnected);
+      eventSource.addEventListener('pipeline_started', handlePipelineStarted);
+      eventSource.addEventListener('step_start', handleStepStart);
+      eventSource.addEventListener('step_completed', handleStepCompleted);
+      eventSource.addEventListener('step_skipped', handleStepSkipped);
+      eventSource.addEventListener('step_failed', handleStepFailed);
+      eventSource.addEventListener('model_start', handleModelStart);
+      eventSource.addEventListener('model_completed', handleModelCompleted);
+      eventSource.addEventListener('progress', handleProgress);
+      eventSource.addEventListener('cancelled', handleCancelled);
+      eventSource.addEventListener('finding', handleFinding);
+      eventSource.addEventListener('completed', handleCompleted);
+      eventSource.addEventListener('error', handleError);
+
+      eventSource.onerror = function(e) {
+        logMessage('Connection error, retrying...', 'error');
+        // EventSource will auto-reconnect
+      };
+    }
+
+    // Event Handlers
+
+    function handleConnected(e) {
+      const data = JSON.parse(e.data);
+      logMessage('Connected to scan stream', 'success');
+    }
+
+    function handlePipelineStarted(e) {
+      const data = JSON.parse(e.data);
+      logMessage(`Pipeline started: ${data.pipeline_name} v${data.pipeline_version}`, 'info');
+
+      // Show cancel button when scan is running
+      document.getElementById('cancelScanBtn').style.display = 'inline-block';
+    }
+
+    function handleStepStart(e) {
+      const data = JSON.parse(e.data);
+      const stepId = data.step_id;
+      const stepKind = data.step_kind;
+
+      steps[stepId] = {
+        id: stepId,
+        kind: stepKind,
+        status: 'running',
+        startTime: Date.now()
+      };
+
+      updateStepsUI();
+      logMessage(`Step started: ${stepId} (${stepKind})`, 'info');
+    }
+
+    function handleStepCompleted(e) {
+      const data = JSON.parse(e.data);
+      const stepId = data.step_id;
+      const findingsCount = data.findings_count || 0;
+      const duration = data.duration_ms || 0;
+
+      if (steps[stepId]) {
+        steps[stepId].status = 'completed';
+        steps[stepId].findingsCount = findingsCount;
+        steps[stepId].duration = duration;
+      }
+
+      updateStepsUI();
+      logMessage(`Step completed: ${stepId} (${findingsCount} findings, ${duration}ms)`, 'success');
+    }
+
+    function handleStepSkipped(e) {
+      const data = JSON.parse(e.data);
+      const stepId = data.step_id;
+      const reason = data.reason || 'Unknown';
+
+      if (!steps[stepId]) {
+        steps[stepId] = { id: stepId, kind: 'unknown', status: 'skipped' };
+      } else {
+        steps[stepId].status = 'skipped';
+      }
+
+      updateStepsUI();
+      logMessage(`Step skipped: ${stepId} (${reason})`, 'warning');
+    }
+
+    function handleStepFailed(e) {
+      const data = JSON.parse(e.data);
+      const stepId = data.step_id;
+      const error = data.error || 'Unknown error';
+
+      if (steps[stepId]) {
+        steps[stepId].status = 'failed';
+        steps[stepId].error = error;
+      }
+
+      updateStepsUI();
+      logMessage(`Step failed: ${stepId} - ${error}`, 'error');
+    }
+
+    function handleModelStart(e) {
+      const data = JSON.parse(e.data);
+      const modelId = data.model_id;
+      const modelName = data.model_name;
+
+      models[modelId] = {
+        id: modelId,
+        name: modelName,
+        status: 'running',
+        calls: 0,
+        latencies: [],
+        findingsCount: 0
+      };
+
+      updateModelsUI();
+      logMessage(`Model started: ${modelName}`, 'info');
+    }
+
+    function handleModelCompleted(e) {
+      const data = JSON.parse(e.data);
+      const modelId = data.model_id;
+      const findingsCount = data.findings_count || 0;
+      const latency = data.latency_ms || 0;
+
+      if (models[modelId]) {
+        models[modelId].status = 'completed';
+        models[modelId].calls++;
+        models[modelId].latencies.push(latency);
+        models[modelId].findingsCount += findingsCount;
+      }
+
+      updateModelsUI();
+      logMessage(`Model completed: ${modelId} (${latency}ms, ${findingsCount} findings)`, 'success');
+    }
+
+    function handleProgress(e) {
+      const data = JSON.parse(e.data);
+      const percent = data.progress_pct || 0;
+      const current = data.current || 0;
+      const total = data.total || 0;
+      const message = data.message || '';
+
+      updateProgressBar(percent, message);
+    }
+
+    function handleFinding(e) {
+      const data = JSON.parse(e.data);
+      const finding = data.finding;
+      const modelId = data.model_id;
+
+      addFinding(finding, modelId);
+      logMessage(`Finding: ${finding.name} (${finding.severity})`, 'warning');
+    }
+
+    function handleCompleted(e) {
+      const data = JSON.parse(e.data);
+      const totalFindings = data.total_findings || 0;
+      const duration = data.duration_ms || 0;
+
+      updateProgressBar(100, 'Completed');
+      updateStatusBadge('completed', 'Completed');
+      logMessage(`Scan completed: ${totalFindings} findings in ${duration}ms`, 'success');
+
+      // Enable view results button
+      document.getElementById('viewResultsBtn').disabled = false;
+      document.getElementById('viewResultsBtn').onclick = function() {
+        window.location.href = `/scan/${scanId}`;
+      };
+
+      // Close SSE connection
+      if (eventSource) {
+        eventSource.close();
+      }
+
+      // Auto-redirect to results after 2 seconds
+      logMessage('Redirecting to results...', 'info');
+      setTimeout(() => {
+        window.location.href = `/scan/${scanId}`;
+      }, 2000);
+    }
+
+    function handleError(e) {
+      const data = JSON.parse(e.data);
+      const error = data.error || 'Unknown error';
+
+      updateStatusBadge('failed', 'Failed');
+      logMessage(`Error: ${error}`, 'error');
+
+      // Hide cancel button
+      document.getElementById('cancelScanBtn').style.display = 'none';
+
+      // Close SSE connection
+      if (eventSource) {
+        eventSource.close();
+      }
+    }
+
+    function handleCancelled(e) {
+      const data = JSON.parse(e.data);
+      const message = data.message || 'Scan cancelled';
+
+      updateProgressBar(100, 'Cancelled');
+      updateStatusBadge('cancelled', 'Cancelled');
+      logMessage(`Scan cancelled: ${message}`, 'warning');
+
+      // Hide cancel button
+      document.getElementById('cancelScanBtn').style.display = 'none';
+
+      // Close SSE connection
+      if (eventSource) {
+        eventSource.close();
+      }
+    }
+
+    // UI Update Functions
+
+    function updateProgressBar(percent, message) {
+      const bar = document.getElementById('progressBar');
+      const percentSpan = document.getElementById('progressPercent');
+      const messageSpan = document.getElementById('progressMessage');
+      const timeSpan = document.getElementById('progressTime');
+
+      bar.style.width = `${percent}%`;
+      percentSpan.textContent = Math.round(percent);
+      if (message) {
+        messageSpan.textContent = message;
+      }
+
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      timeSpan.innerHTML = `Elapsed: <strong>${elapsed}s</strong>`;
+    }
+
+    function updateStatusBadge(status, text) {
+      const badge = document.getElementById('statusBadge');
+      badge.className = `status-badge ${status}`;
+
+      if (status === 'running') {
+        badge.innerHTML = '<span class="spinner"></span> ' + text;
+      } else if (status === 'completed') {
+        badge.innerHTML = '<i class="bi bi-check-circle"></i> ' + text;
+      } else if (status === 'failed') {
+        badge.innerHTML = '<i class="bi bi-x-circle"></i> ' + text;
+      }
+    }
+
+    function updateStepsUI() {
+      const container = document.getElementById('stepsContainer');
+      const stepIds = Object.keys(steps);
+
+      if (stepIds.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No steps yet</p></div>';
+        return;
+      }
+
+      container.innerHTML = stepIds.map(stepId => {
+        const step = steps[stepId];
+        const icon = getStepIcon(step.status);
+        const meta = getStepMeta(step);
+
+        return `
+          <div class="step-indicator">
+            <div class="step-icon ${step.status}">
+              ${icon}
+            </div>
+            <div class="step-details">
+              <div class="step-name">${stepId}</div>
+              <div class="step-meta">${meta}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function getStepIcon(status) {
+      const icons = {
+        pending: '<i class="bi bi-circle"></i>',
+        running: '<i class="bi bi-arrow-repeat"></i>',
+        completed: '<i class="bi bi-check"></i>',
+        failed: '<i class="bi bi-x"></i>',
+        skipped: '<i class="bi bi-dash"></i>'
+      };
+      return icons[status] || icons.pending;
+    }
+
+    function getStepMeta(step) {
+      if (step.status === 'running') {
+        return `<span class="text-primary">Running...</span>`;
+      } else if (step.status === 'completed') {
+        return `${step.kind} • ${step.findingsCount || 0} findings • ${step.duration || 0}ms`;
+      } else if (step.status === 'skipped') {
+        return `<span class="text-muted">Skipped</span>`;
+      } else if (step.status === 'failed') {
+        return `<span class="text-danger">Failed: ${step.error}</span>`;
+      }
+      return step.kind;
+    }
+
+    function updateModelsUI() {
+      const container = document.getElementById('modelsContainer');
+      const modelIds = Object.keys(models);
+
+      if (modelIds.length === 0) {
+        container.innerHTML = '<div class="empty-state"><p>No model data yet</p></div>';
+        return;
+      }
+
+      container.innerHTML = modelIds.map(modelId => {
+        const model = models[modelId];
+        const avgLatency = model.latencies.length > 0
+          ? Math.round(model.latencies.reduce((a, b) => a + b, 0) / model.latencies.length)
+          : 0;
+
+        return `
+          <div class="model-panel">
+            <div class="model-header">
+              <span class="model-name">${model.name}</span>
+              <span class="model-status ${model.status}">${model.status}</span>
+            </div>
+            <div class="model-stats">
+              <div class="model-stat">
+                <span class="model-stat-label">Calls</span>
+                <span class="model-stat-value">${model.calls}</span>
+              </div>
+              <div class="model-stat">
+                <span class="model-stat-label">Avg Latency</span>
+                <span class="model-stat-value">${avgLatency}ms</span>
+              </div>
+              <div class="model-stat">
+                <span class="model-stat-label">Findings</span>
+                <span class="model-stat-value">${model.findingsCount}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function addFinding(finding, modelId) {
+      const container = document.getElementById('findingsContainer');
+      const countSpan = document.getElementById('findingsCount');
+
+      // Remove empty state if present
+      if (container.querySelector('.empty-state')) {
+        container.innerHTML = '';
+      }
+
+      findingsCount++;
+      countSpan.textContent = findingsCount;
+
+      const findingEl = document.createElement('div');
+      findingEl.className = `finding-item severity-${finding.severity || 'medium'}`;
+      findingEl.innerHTML = `
+        <div class="finding-name">${finding.name || 'Unknown Vulnerability'}</div>
+        <div class="finding-meta">
+          ${finding.severity ? `<span class="badge bg-secondary">${finding.severity}</span>` : ''}
+          ${finding.cwe ? `<span class="badge bg-secondary">${finding.cwe}</span>` : ''}
+          ${finding.file ? `<span class="text-muted ms-2">${finding.file}</span>` : ''}
+        </div>
+      `;
+
+      container.insertBefore(findingEl, container.firstChild);
+
+      // Limit to 50 findings in UI
+      if (container.children.length > 50) {
+        container.removeChild(container.lastChild);
+      }
+    }
+
+    function logMessage(message, level = 'info') {
+      const log = document.getElementById('activityLog');
+      const timestamp = new Date().toLocaleTimeString();
+
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${level}`;
+      entry.innerHTML = `<span class="log-timestamp">${timestamp}</span><span>${message}</span>`;
+
+      log.appendChild(entry);
+
+      // Auto-scroll to bottom
+      log.scrollTop = log.scrollHeight;
+
+      // Limit to 100 log entries
+      if (log.children.length > 100) {
+        log.removeChild(log.firstChild);
+      }
+    }
+
+    // Update elapsed time every second
+    setInterval(() => {
+      const timeSpan = document.getElementById('progressTime');
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      timeSpan.innerHTML = `Elapsed: <strong>${elapsed}s</strong>`;
+    }, 1000);
+
+    // Cancel button handler
+    document.getElementById('cancelScanBtn').addEventListener('click', async function() {
+      if (!confirm('Are you sure you want to cancel this scan?')) {
+        return;
+      }
+
+      const btn = this;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Cancelling...';
+
+      try {
+        const response = await fetch(`/api/scan/${scanId}/cancel`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'}
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          logMessage('Scan cancellation requested', 'warning');
+        } else {
+          alert(`Failed to cancel scan: ${data.error || 'Unknown error'}`);
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-x-circle"></i> Cancel Scan';
+        }
+      } catch (error) {
+        alert(`Error cancelling scan: ${error.message}`);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-x-circle"></i> Cancel Scan';
+      }
+    });
+
+    // Initialize on page load
+    initSSE();
+  })();
+</script>
+{% endblock %}

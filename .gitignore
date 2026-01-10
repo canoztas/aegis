@@ -71,9 +71,61 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+test_*.py
+test_project/
 
 # Security
 .env
 config/secrets.py
 *.pem
 *.key
+
+# Development documentation (phase plans, internal notes, status docs)
+*_FIX.md
+*_FEATURE.md
+*_SUMMARY.md
+*_COMPLETE.md
+*_GUIDE.md
+*_STATUS.md
+*_QUICKSTART.md
+SCAN_BACKGROUND_FIX.md
+CLEAR_HISTORY_FEATURE.md
+FILENAME_SEARCH_AND_PROGRESS_NAVIGATION.md
+PHASE_*.md
+phase_*.md
+STATUS.md
+IMPLEMENTATION_STATUS.md
+QUICK_START.md
+
+# Keep only main project documentation
+!README.md
+
+# Test cases and sample data
+test_cases/
+sample_data/
+vulnerable_code/
+test_*.zip
+
+# Database files
+data/*.db
+data/*.db-journal
+*.db
+*.db-journal
+# But keep reference data
+!data/cwe.json
+
+# Migration scripts (keep schema, exclude data migrations)
+migrate_db.py
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Claude/AI generated files (optional)
+.claude/
+
+# Local configuration
+.local/
+*.local.json
