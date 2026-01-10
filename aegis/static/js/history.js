@@ -89,7 +89,7 @@ function createScanCard(scan) {
     const timestamp = scan.created_at ? new Date(scan.created_at).toLocaleString() : 'UNKNOWN_DATE';
 
     col.innerHTML = `
-        <div class="card bg-panel ${statusBorder} shadow-sm rounded-0 transition-all cursor-pointer group" onclick="window.location.href='/scan/${scan.scan_id}'">
+        <div class="card bg-panel ${statusBorder} shadow-sm rounded-0 transition-all cursor-pointer group" onclick="if(!event.target.closest('button')) window.location.href='/scan/${scan.scan_id}'">
             <div class="card-body p-3 d-flex align-items-center flex-wrap gap-3">
                 <!-- ID & Date -->
                 <div class="flex-grow-1">
@@ -113,17 +113,55 @@ function createScanCard(scan) {
                     ${scan.total_findings === 0 ? '<span class="badge bg-success bg-opacity-10 text-success rounded-0 font-monospace border border-success border-opacity-25">CLEAN</span>' : ''}
                 </div>
                 
-                <!-- Action -->
-                <div class="border-start border-subtle ps-3 d-flex align-items-center">
-                    <button class="btn btn-icon btn-sm text-secondary hover-text-primary">
-                        <i class="bi bi-chevron-right"></i>
-                    </button>
-                </div>
+                <!-- Action Placeholder -->
+                <div class="action-container border-start border-subtle ps-3 d-flex align-items-center gap-2"></div>
             </div>
         </div>
     `;
 
+    // Inject Action Buttons
+    const actionContainer = col.querySelector(".action-container");
+
+    // Delete Button
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "btn btn-icon btn-sm text-secondary hover-text-danger transition-colors";
+    deleteBtn.innerHTML = '<i class="bi bi-trash"></i>';
+    deleteBtn.title = "DELETE_ARCHIVE";
+    deleteBtn.onclick = (e) => {
+        e.stopPropagation(); // Prevent card click
+        if (confirm("CONFIRM_DELETION: Purge this scan record?")) {
+            deleteScan(scan.scan_id);
+        }
+    };
+    actionContainer.appendChild(deleteBtn);
+
+    // View Button
+    const viewBtn = document.createElement("button");
+    viewBtn.className = "btn btn-icon btn-sm text-secondary hover-text-primary transition-colors";
+    viewBtn.innerHTML = '<i class="bi bi-chevron-right"></i>';
+    viewBtn.onclick = (e) => {
+        e.stopPropagation();
+        window.location.href = `/scan/${scan.scan_id}`;
+    };
+    actionContainer.appendChild(viewBtn);
+
     return col;
+}
+
+async function deleteScan(scanId) {
+    try {
+        const res = await fetch(`/api/scan/${scanId}`, { method: 'DELETE' });
+        const data = await res.json();
+
+        if (res.ok) {
+            loadScanHistory(); // Reload list
+        } else {
+            alert(`ERROR: ${data.error}`);
+        }
+    } catch (e) {
+        console.error("Delete failed", e);
+        alert("CRITICAL_ERROR: Failed to delete scan.");
+    }
 }
 
 function filterHistory(query) {

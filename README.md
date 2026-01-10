@@ -1,279 +1,278 @@
 <div align="center">
   <img src="aegis/static/img/aegis-logo.svg" alt="aegis logo" width="200"/>
-  <h1>aegis - AI Powered Security Analysis Tool</h1>
+  <h1>Aegis v1.0.0 - AI-based SAST Framework</h1>
 </div>
 
-aegis is an AI-powered Static Application Security Testing (SAST) tool that uses Large Language Models (LLMs) via Ollama to analyze source code for security vulnerabilities. It provides comprehensive vulnerability detection with detailed reports.
+Aegis is an open-source SAST framework that uses LLMs to analyze source code for security vulnerabilities.
+It produces structured findings and detailed reports. The architecture is intentionally flexible so you can
+add new LLM providers, new Hugging Face models, or even classic ML tools.
 
-[![Demo Video](https://img.youtube.com/vi/StXTwdxQyQI/0.jpg)](https://youtu.be/StXTwdxQyQI)
+## Demos
 
-**Watch the demo video (Ollama): [https://youtu.be/StXTwdxQyQI](https://youtu.be/StXTwdxQyQI)**
+[![Demo Video (Ollama)](https://img.youtube.com/vi/StXTwdxQyQI/0.jpg)](https://youtu.be/StXTwdxQyQI)
 
-**Watch the demo video (Cloud AI): [FOR PUBLIC NOT YET RELEASED]**
+- Demo video (Ollama): https://youtu.be/StXTwdxQyQI
+- Demo video (Cloud AI): FOR PUBLIC NOT YET RELEASED
+- Demo video (Hugging Face Models): FOR PUBLIC NOT YET RELEASED
+- Demo video (Old-school ML Models): FOR PUBLIC NOT YET RELEASED
 
-**Watch the demo video (HuggingFace Models): [FOR PUBLIC NOT YET RELEASED]**
+## What Aegis is
 
-**Watch the demo video (Old-School ML Models): [FOR PUBLIC NOT YET RELEASED]**
+- A registry-first SAST framework for AI and ML models.
+- A flexible pipeline that supports multiple roles (triage, deep_scan, judge, explain).
+- A pluggable parsing system that converts raw model output into normalized findings.
+- A web UI and API for model management, scans, and exports.
 
-## Overview
+## Architecture at a Glance
 
-aegis leverages multiple AI models working in parallel to identify security vulnerabilities in source code. By utilizing consensus algorithms, it combines findings from multiple models to reduce false positives and improve detection accuracy. The tool supports various LLM providers including Ollama (local), OpenAI, Anthropic, Azure, and HuggingFace.
+- Model Registry: single source of truth stored in SQLite.
+- Discovery vs Registration: Ollama discovery is separate from registry activation.
+- Providers: Ollama (local), HF local, OpenAI-compatible, Anthropic-compatible.
+- Runners: role-based prompt building and execution.
+- Parsers: JSON and classification parsers with pluggable extension points.
+- Runtime Manager: per-model CPU/GPU selection, device_map, dtype, quantization, concurrency.
 
 ## Features
 
-- **Multi-Model Analysis**: Execute scans using multiple AI models simultaneously for comprehensive coverage
-- **Consensus Engine**: Combines findings from multiple models using various consensus strategies (union, majority vote, weighted vote, judge model)
-- **CWE-Aware Detection**: Automatically focuses on relevant Common Weakness Enumeration (CWE) vulnerability types based on the programming language
-- **Web Interface**: User-friendly interface with dark mode support and integrated code snippet visualization for vulnerability context
-- **Code Context Display**: Shows vulnerable code snippets with context lines and severity-based highlighting
-- **Industry-Standard Exports**: Export results in SARIF format for integration with CI/CD pipelines
-- **Flexible Model Support**: Compatible with local (Ollama) and cloud-based LLM providers
+- Registry-driven scans (no hidden model selection).
+- Local Ollama discovery and registration.
+- Hugging Face presets (CodeBERT triage, CodeAstra deep_scan).
+- JSON and HF classification parsers with fallback handling.
+- Runtime controls per model (CPU/GPU).
+- Consensus engine for multi-model results.
+- Pipeline execution for role-based scans.
+- Web UI for model control and scan history.
+- SARIF and CSV exports.
 
-## Installation
+## Quickstart
 
-### Prerequisites
-
-- Python 3.9 or higher
-- `uv` package manager (recommended) or `pip`
-- Ollama (optional, for local model execution)
-
-### Setup
-
-####  Manual Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/canoztas/aegis
-   cd aegis
-   ```
-
-2. Install dependencies:
-   
-   Using `uv` (recommended):
-   ```bash
-   uv sync
-   ```
-   
-   Or using `pip`:
-   ```bash
-   pip install -e .
-   ```
-
-3. Configure models in `config/models.yaml` (see Configuration section)
-
-4. Start the application:
-   ```bash
-   uv run python app.py
-   # or
-   python app.py
-   ```
-
-5. Access the web interface at `http://localhost:5000`
-
-
-## Usage
-
-### Web Interface
-
-1. Navigate to the main page and upload a ZIP file containing your source code
-2. Select one or more AI models from the available options
-3. Choose a consensus strategy (optional)
-4. Initiate the scan and wait for results
-5. Review findings with code snippets and detailed vulnerability information
-6. Export results in SARIF or CSV format if needed
-
-### Model Discovery & Registry
-
-Check what Ollama has locally and register models for scanning:
+### 1) Install
 
 ```bash
-# Discover locally installed Ollama models
-curl http://localhost:5000/api/models/discovered/ollama | jq
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e .
+```
 
-# Register an Ollama model (persisted in SQLite)
+Optional local HF dependencies:
+```bash
+pip install transformers torch peft accelerate
+# Optional for 4-bit/8-bit: pip install bitsandbytes
+```
+
+### 2) Initialize the registry
+
+```bash
+python scripts/migrate_to_v2.py
+```
+
+This seeds providers and models from `config/models.yaml` into `data/aegis.db`.
+
+### 3) Run the server
+
+```bash
+python app.py
+```
+
+Defaults to `http://127.0.0.1:5000` (override with `HOST` and `PORT`).
+
+### 4) Open the UI
+
+- Home: `http://localhost:5000/`
+- Models: `http://localhost:5000/models`
+- History: `http://localhost:5000/history`
+
+## Model Management (UI)
+
+In Models:
+- REGISTERED shows all registered models and lets you edit settings.
+- DISCOVER_OLLAMA pulls local Ollama models.
+- HUGGING_FACE shows presets and registers them with one click.
+
+Editable settings:
+- Runtime: device, device_map, dtype, quantization, max concurrency, keep-alive.
+- Generation: max_new_tokens, min_new_tokens, temperature, top_p, do_sample.
+- Provider: HF adapter/base model, Ollama options, prompt template.
+
+## Adding a New Hugging Face Model
+
+You can add a new HF model via API or directly in code. The only required fields are
+model_id, model_type, provider_id, model_name, roles, and parser_id.
+
+### Example: register a new HF model (API)
+
+```bash
 curl -X POST http://localhost:5000/api/models/registry \
   -H "Content-Type: application/json" \
   -d '{
-    "model_type": "ollama_local",
-    "provider_id": "ollama",
-    "model_name": "qwen2.5-coder:7b",
-    "display_name": "Qwen 2.5 Coder 7B",
+    "model_type": "hf_local",
+    "provider_id": "huggingface",
+    "model_name": "your-org/your-model",
+    "display_name": "Your HF Model",
     "roles": ["deep_scan"],
     "parser_id": "json_schema",
-    "settings": {"base_url": "http://localhost:11434", "temperature": 0.1}
+    "settings": {
+      "task_type": "text-generation",
+      "runtime": {
+        "device_preference": ["cuda", "cpu"],
+        "dtype": "bf16"
+      },
+      "generation_kwargs": {
+        "max_new_tokens": 512,
+        "min_new_tokens": 32,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "do_sample": true
+      }
+    }
   }'
-
-# List all registered models
-curl http://localhost:5000/api/models/registry
-
-# (Optional) Trigger a pull via API or use `ollama pull <name>`
-curl -X POST http://localhost:5000/api/models/ollama/pull \
-  -H "Content-Type: application/json" \
-  -d '{"model_name": "qwen2.5-coder:7b"}'
-
-# Smoke-test a registered model
-curl -X POST http://localhost:5000/api/models/test \
-  -H "Content-Type: application/json" \
-  -d '{"model_id": "ollama:qwen2.5-coder:7b", "prompt": "def add(a,b): return a+b"}'
 ```
 
-### Hugging Face Local Models (examples)
+### Example: register a new HF model (code)
 
-Install extras (`pip install transformers torch`) and register the built-in presets:
+```python
+from aegis.models.registry import ModelRegistryV2
+from aegis.models.schema import ModelType, ModelRole
+
+registry = ModelRegistryV2()
+registry.register_model(
+    model_id="hf:your_model",
+    model_type=ModelType.HF_LOCAL,
+    provider_id="huggingface",
+    model_name="your-org/your-model",
+    display_name="Your HF Model",
+    roles=[ModelRole.DEEP_SCAN],
+    parser_id="json_schema",
+    settings={
+        "task_type": "text-generation",
+        "generation_kwargs": {"max_new_tokens": 256},
+        "runtime": {"device_preference": ["cuda", "cpu"]},
+    },
+)
+```
+
+### Custom output parsing
+
+If your model does not return JSON or standard HF labels, implement a parser and reference it by ID:
+
+- Add a parser in `aegis/models/parsers/`.
+- Register it in `aegis/models/parser_factory.py` or use a dotted path
+  like `your_package.your_parser.CustomParser`.
+
+## Scanning
+
+### Standard scan (upload ZIP)
 
 ```bash
-# Register CodeBERT (triage) and CodeAstra (deep scan)
-curl -X POST http://localhost:5000/api/models/hf/register_preset \
-  -H "Content-Type: application/json" \
-  -d '{"preset_id": "codebert_insecure", "display_name": "CodeBERT Triage"}'
-
-curl -X POST http://localhost:5000/api/models/hf/register_preset \
-  -H "Content-Type: application/json" \
-  -d '{"preset_id": "codeastra_7b", "display_name": "CodeAstra Deep"}'
+curl -X POST http://localhost:5000/api/scan \
+  -F "file=@path/to/source.zip" \
+  -F "models=ollama:qwen2.5-coder:7b,hf:codeastra_7b" \
+  -F "consensus_strategy=union"
 ```
 
-Config-driven examples (`config/models.yaml`):
+### Pipeline scan
 
-```yaml
-models:
-  huggingface:
-    models:
-      - model_id: "hf:codebert_insecure"
-        hf_model_id: "mrm8488/codebert-base-finetuned-detect-insecure-code"
-        task_type: "text-classification"
-        display_name: "CodeBERT Insecure Code Detector"
-        roles: ["triage"]
-        parser: "hf_classification"
-        parser_config:
-          positive_labels: ["LABEL_1", "VULNERABLE", "INSECURE"]
-          threshold: 0.5
-
-      - model_id: "hf:codeastra_7b"
-        hf_model_id: "rootxhacker/CodeAstra-7B"
-        task_type: "text-generation"
-        display_name: "CodeAstra 7B"
-        roles: ["deep_scan"]
-        parser: "json_schema"
-        prompt_template: |
-          Analyze the code and return strictly:
-          {"findings":[{"file_path":"{file_path}","line_start":<n>,"line_end":<n>,
-            "snippet":"<code>","cwe":"<cwe or null>","severity":"high|medium|low|info",
-            "confidence":<0-1>,"title":"<short>","category":"<type>",
-            "description":"<details>","recommendation":"<fix>"}]}
+```bash
+curl -X POST http://localhost:5000/api/scan/pipeline \
+  -F "file=@path/to/source.zip" \
+  -F "pipeline=classic"
 ```
 
-Sample pipeline snippet (triage -> deep):
+### Exports
 
-```yaml
-steps:
-  - id: "triage"
-    kind: "role"
-    role: "triage"
-  - id: "deep_scan"
-    kind: "role"
-    role: "deep_scan"
+```bash
+curl http://localhost:5000/api/scan/<scan_id>/sarif
+curl http://localhost:5000/api/scan/<scan_id>/csv
 ```
 
-### API
+## Runtime Settings (CPU/GPU)
 
-The application provides RESTful API endpoints for programmatic access:
+Runtime configuration lives in `settings.runtime`:
 
-- `POST /api/scan` - Create a new security scan
-- `GET /api/scan/<scan_id>` - Retrieve scan results
-- `GET /api/scan/<scan_id>/export/sarif` - Export results as SARIF
-- `GET /api/scan/<scan_id>/export/csv` - Export results as CSV
-- `GET /api/models/discovered/ollama` - List locally discovered Ollama models
-- `GET /api/models/registry` - List registered models (single source of truth)
-- `POST /api/models/registry` - Register/upsert a model (Ollama, HF local, OpenAI-compatible)
-- `POST /api/models/ollama/pull` - Pull an Ollama model (or return CLI instructions)
-- `POST /api/models/test` - Quick smoke-test a registered model
-- `GET /api/models/hf/presets` - List HF presets (CodeBERT, CodeAstra)
-- `POST /api/models/hf/register_preset` - Register an HF preset model
-
-## Configuration
-
-Model configuration is managed through `config/models.yaml`. Each model entry specifies:
-
-- Model identifier
-- Adapter type (ollama, openai, anthropic, azure, huggingface, classic)
-- Provider-specific settings (API keys, endpoints, model names)
-- Enabled status
-
-Example configuration:
-
-```yaml
-models:
-  - id: llama3.1
-    type: ollama
-    enabled: true
-    config:
-      model_name: llama3.1:8b
-      base_url: http://localhost:11434
+```json
+{
+  "runtime": {
+    "device_preference": ["cuda", "cpu"],
+    "device_map": "auto",
+    "dtype": "bf16",
+    "quantization": "4bit",
+    "max_concurrency": 1,
+    "keep_alive_seconds": 0,
+    "allow_fallback": true
+  }
+}
 ```
 
-## Consensus Strategies
+Notes:
+- For GPU, install a CUDA-enabled PyTorch build.
+- If CUDA is unavailable, Aegis can auto-fallback to CPU (unless require_device is set).
 
-aegis supports multiple consensus strategies to combine findings from different models:
+## Configuration (Seed)
 
-- **Union**: Returns all unique findings from all models
-- **Majority Vote**: Includes findings detected by more than half of the models
-- **Weighted Vote**: Uses model-specific confidence weights
-- **Judge Model**: Employs a separate LLM to evaluate and merge findings
+`config/models.yaml` is used to seed providers/models into the registry.
+To apply changes, rerun:
 
-## Supported File Types
+```bash
+python scripts/migrate_to_v2.py
+```
 
-The tool analyzes common source code file types including:
-- Python (.py)
-- JavaScript/TypeScript (.js, .ts, .jsx, .tsx)
-- Java (.java)
-- C/C++ (.c, .cpp, .h, .hpp)
-- Go (.go)
-- Ruby (.rb)
-- PHP (.php)
-- And other text-based source files
+The registry in `data/aegis.db` remains the source of truth for scans.
 
-## Architecture
+## API Reference (current)
 
-aegis is built with a modular architecture:
+- `GET /api/models/discovered/ollama`
+- `POST /api/models/registry`
+- `GET /api/models/registry`
+- `PATCH /api/models/registry/<model_id>`
+- `POST /api/models/ollama/pull`
+- `POST /api/models/test`
+- `GET /api/models/hf/presets`
+- `POST /api/models/hf/register_preset`
+- `POST /api/scan`
+- `GET /api/scan/<scan_id>`
+- `GET /api/scan/<scan_id>/status`
+- `POST /api/scan/<scan_id>/cancel`
+- `POST /api/scan/pipeline`
+- `GET /api/scan/<scan_id>/sarif`
+- `GET /api/scan/<scan_id>/csv`
 
-- **Adapters**: Standardized interfaces for different LLM providers
-- **Model Registry**: Centralized model configuration and management
-- **Prompt Builder**: Constructs prompts with CWE context and structured output schemas
-- **Consensus Engine**: Implements various strategies for combining model findings
-- **Multi-Model Runner**: Orchestrates parallel execution of multiple models
-- **Export Module**: Generates SARIF and CSV reports
+## Extending Aegis with Other Tools
 
-## Development
+Aegis is designed as a framework. You can add:
+- Traditional ML classifiers.
+- Static analyzers or heuristics.
+- Custom pre-filters or post-processors.
 
-### Project Structure
+Use the same registry, runner, and parser pattern to integrate new tools.
+
+## Troubleshooting
+
+- Keras/TensorFlow warnings on startup: set `TRANSFORMERS_NO_TF=1`.
+- GPU not used: check `torch.cuda.is_available()` and install a CUDA-enabled torch wheel.
+- HF CodeAstra output not JSON: increase min_new_tokens and enforce a JSON-only prompt template.
+- HF missing dependencies: install `transformers torch peft accelerate`.
+
+## Project Structure
 
 ```
 aegis/
-├── adapters/          # LLM adapter implementations
-├── consensus/         # Consensus engine strategies
-├── static/           # Frontend assets (CSS, JS, images)
-├── templates/        # HTML templates
-├── config/           # Configuration files
-├── data/             # CWE data and templates
-└── routes.py         # Flask application routes
+├─ aegis/                 # Core server and model system
+├─ aegis/models/          # Registry, parsers, runners, runtime manager
+├─ aegis/providers/       # Local providers (HF)
+├─ aegis/connectors/      # External connectors (Ollama/OpenAI)
+├─ aegis/templates/       # UI
+├─ aegis/static/          # UI assets
+├─ config/models.yaml     # Seed config
+├─ data/aegis.db          # Registry + scan history (SQLite)
+├─ scripts/               # Migration and helper scripts
 ```
 
-### Running Tests
+## Tests
 
 ```bash
-uv run pytest
-# or
-pytest
+pytest -q
 ```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contributing
-
-Contributions are welcome. Please ensure that your code follows the project's style guidelines and includes appropriate tests.
-
-## Support
-
-For issues, questions, or contributions, please open an issue on the GitHub repository.
+MIT. See `LICENSE`.
