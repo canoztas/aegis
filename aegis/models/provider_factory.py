@@ -6,6 +6,7 @@ from typing import Any, Dict
 from aegis.connectors.ollama_connector import OllamaConnector
 from aegis.connectors.openai_connector import OpenAIConnector
 from aegis.models.schema import ModelRecord, ModelType
+from aegis.models.runtime import RuntimeConfigError, resolve_runtime
 from aegis.providers.hf_local import HFLocalProvider
 
 
@@ -81,14 +82,39 @@ def create_provider(model: ModelRecord) -> Any:
 
     if model.model_type == ModelType.HF_LOCAL:
         try:
+            runtime = resolve_runtime(settings)
+            hf_kwargs = dict(settings.get("hf_kwargs", {}) or {})
+            if runtime.device_map is not None:
+                hf_kwargs["device_map"] = runtime.device_map
+            if runtime.dtype:
+                hf_kwargs["torch_dtype"] = runtime.dtype
+            runtime_cfg = settings.get("runtime") or {}
+            quantization_set = ("quantization" in runtime_cfg) or ("quantization" in settings)
+            if quantization_set:
+                if runtime.quantization == "4bit":
+                    hf_kwargs["load_in_4bit"] = True
+                    hf_kwargs.pop("load_in_8bit", None)
+                elif runtime.quantization == "8bit":
+                    hf_kwargs["load_in_8bit"] = True
+                    hf_kwargs.pop("load_in_4bit", None)
+                elif runtime.quantization is None:
+                    hf_kwargs.pop("load_in_4bit", None)
+                    hf_kwargs.pop("load_in_8bit", None)
+
+            device = runtime.device if "device_map" not in hf_kwargs else None
+
             return HFLocalProvider(
                 model_id=model.model_name,
                 task_type=settings.get("task_type", "text-generation"),
                 adapter_id=settings.get("adapter_id"),
                 base_model_id=settings.get("base_model_id"),
-                device=settings.get("device"),
-                **settings.get("hf_kwargs", {}),
+                device=device,
+                generation_kwargs=settings.get("generation_kwargs"),
+                max_workers=runtime.max_concurrency,
+                **hf_kwargs,
             )
+        except RuntimeConfigError as exc:
+            raise ProviderCreationError(str(exc))
         except Exception as exc:
             raise ProviderCreationError(str(exc))
 

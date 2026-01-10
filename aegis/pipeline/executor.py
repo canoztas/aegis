@@ -21,8 +21,9 @@ from aegis.models.schema import ModelRole
 from aegis.prompt_builder import PromptBuilder
 from aegis.consensus.engine import ConsensusEngine
 from aegis.data_models import ModelResponse, Finding
-from aegis.events import EventEmitter, EventType
-from aegis.models.executor import ModelExecutionEngine
+from aegis.events import EventEmitter
+from aegis.models.engine import ModelExecutionEngine
+from aegis.utils import chunk_file_lines
 
 
 class PipelineExecutor:
@@ -233,7 +234,7 @@ class PipelineExecutor:
         for model in role_models:
             per_model_findings[model.model_id] = []
             for file_path, content in source_files.items():
-                for chunk_content, line_start, line_end in self._chunk_file(content, chunk_size):
+                for chunk_content, line_start, line_end in chunk_file_lines(content, chunk_size):
                     findings = self.execution_engine.run_model_to_findings(
                         model=model,
                         code=chunk_content,
@@ -294,7 +295,7 @@ class PipelineExecutor:
             role_hint = model.roles[0] if model.roles else None
 
             for file_path, content in source_files.items():
-                for chunk_content, line_start, line_end in self._chunk_file(content, chunk_size):
+                for chunk_content, line_start, line_end in chunk_file_lines(content, chunk_size):
                     findings = self.execution_engine.run_model_to_findings(
                         model=model,
                         code=chunk_content,
@@ -346,22 +347,6 @@ class PipelineExecutor:
             return ModelRole(role)
         except Exception:
             return mapping.get(role.lower())
-
-    def _chunk_file(
-        self, content: str, chunk_size: int
-    ) -> List[tuple[str, int, int]]:
-        """Split file content into chunks with start/end lines."""
-        lines = content.split("\n")
-        chunks = []
-
-        for i in range(0, len(lines), chunk_size):
-            chunk_lines = lines[i : i + chunk_size]
-            chunk_content = "\n".join(chunk_lines)
-            line_start = i + 1
-            line_end = min(i + chunk_size, len(lines))
-            chunks.append((chunk_content, line_start, line_end))
-
-        return chunks
 
     def _execute_consensus_step(
         self,

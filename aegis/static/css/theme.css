@@ -1,74 +1,123 @@
+/* ===================================
+   AEGIS - DOTA 2 DIRE/RADIANT THEME
+   Style: High Contrast, Deep Dark, "Void"
+   =================================== */
+
 :root {
   /* 
-   * Modern Geometric Color Palette 
-   * Base: Zinc (Neutral, crisp)
-   * Primary: Indigo/Violet (Vibrant, tech-forward)
-   * Accent: Cyan (Electric)
+   * Backgrounds - Shifts to "Void" black/blue
    */
+  --bg-app: #050505;
+  /* Pure Void */
+  --bg-panel: #0f1216;
+  /* Deep Stone */
+  --bg-surface: #1a1e24;
+  /* Dark Stone (Fixed: Was too light before) */
 
-  /* Light Theme (Default) */
-  --bg-app: #f4f4f5;         /* Zinc-100 */
-  --bg-panel: #ffffff;       /* White */
-  --bg-surface: #fafafa;     /* Zinc-50 */
-  
-  --brand-primary: #6366f1;  /* Indigo-500 */
-  --brand-hover: #4f46e5;    /* Indigo-600 */
-  --brand-glow: rgba(99, 102, 241, 0.3);
-  
-  --text-main: #18181b;      /* Zinc-900 */
-  --text-secondary: #52525b; /* Zinc-600 */
-  --text-muted: #a1a1aa;     /* Zinc-400 */
-  
-  --border-subtle: #e4e4e7;  /* Zinc-200 */
-  --border-focus: #a5b4fc;   /* Indigo-200 */
+  /* 
+   * Accents 
+   */
+  --brand-primary: #2c8c7f;
+  /* Radiant Teal */
+  --brand-hover: #00ffcc;
+  /* Bright Energy */
+  --brand-glow: rgba(44, 140, 127, 0.2);
 
-  /* Status Colors */
-  --status-success: #10b981; /* Emerald-500 */
-  --status-warning: #f59e0b; /* Amber-500 */
-  --status-danger: #ef4444;  /* Red-500 */
-  --status-info: #06b6d4;    /* Cyan-500 */
+  --brand-secondary: #c23c2a;
+  /* Dire Red */
+  --brand-accent: #ffd700;
+  /* Gold */
 
-  /* Glassmorphism Tokens */
-  --glass-bg: rgba(255, 255, 255, 0.8);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-blur: 16px;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  /* Text */
+  --text-main: #e6edf3;
+  /* Bright White-Blue */
+  --text-secondary: #d0d7de;
+  /* Very Light Grey */
+  --text-muted: #a3b3bc;
+  /* Medium-Light Grey (Readable) */
+
+  /* Borders */
+  --border-subtle: #21262d;
+  --border-focus: #388bfd;
+
+  /* Component Tokens */
+  --panel-radius: 0px;
+  /* Sharp edges for "Aegis" feel */
+  --panel-shadow: 0 0 0 1px var(--border-subtle), 0 8px 24px rgba(0, 0, 0, 0.8);
 
   /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
 }
 
-/* Dark Theme Data Attribute */
-[data-theme="dark"] {
-  /* Zinc Dark Mode Palette */
-  --bg-app: #09090b;         /* Zinc-950 - Deepest black */
-  --bg-panel: #18181b;       /* Zinc-900 - Card bg */
-  --bg-surface: #27272a;     /* Zinc-800 - Input/Item bg */
-  
-  --brand-primary: #818cf8;  /* Indigo-400 - Lighter for dark mode */
-  --brand-hover: #6366f1;    /* Indigo-500 */
-  --brand-glow: rgba(129, 140, 248, 0.25);
-  
-  --text-main: #f4f4f5;      /* Zinc-100 */
-  --text-secondary: #a1a1aa; /* Zinc-400 */
-  --text-muted: #52525b;     /* Zinc-600 */
-  
-  --border-subtle: #27272a;  /* Zinc-800 */
-  --border-focus: #4338ca;   /* Indigo-700 */
+body {
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  background-image: radial-gradient(circle at 50% -20%, rgba(44, 140, 127, 0.08), transparent 70%);
+}
 
-  /* Status Colors (Slightly desaturated for dark mode) */
-  --status-success: #34d399; /* Emerald-400 */
-  --status-warning: #fbbf24; /* Amber-400 */
-  --status-danger: #f87171;  /* Red-400 */
-  --status-info: #22d3ee;    /* Cyan-400 */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--text-main);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
 
-  /* Glassmorphism Tokens */
-  --glass-bg: rgba(24, 24, 27, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.08); /* Subtle white border */
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+.text-primary {
+  color: var(--brand-hover) !important;
+}
+
+.text-secondary {
+  color: var(--text-secondary) !important;
+}
+
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-primary);
+}
+
+/* Utility */
+.bg-panel {
+  background-color: var(--bg-panel);
+}
+
+.bg-surface {
+  background-color: var(--bg-surface);
+}
+
+.border-subtle {
+  border-color: var(--border-subtle) !important;
+}
+
+/* Dota/Aegis Glows */
+.glow-box {
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--border-subtle);
+}
+
+.hover-glow:hover {
+  box-shadow: 0 0 15px var(--brand-glow);
+  border-color: var(--brand-primary);
 }

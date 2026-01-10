@@ -8,7 +8,8 @@ from flask import Blueprint, jsonify, request, current_app
 from aegis.models.schema import ModelType, ModelRole, ModelStatus, ModelAvailability
 from aegis.models.registry import ModelRegistryV2
 from aegis.models.discovery.ollama import OllamaDiscoveryClient
-from aegis.models.executor import ModelExecutionEngine
+from aegis.models.engine import ModelExecutionEngine
+from aegis.models.runtime_manager import DEFAULT_RUNTIME_MANAGER
 from aegis.providers.hf_local import create_hf_provider, CODEBERT_INSECURE, CODEASTRA_7B
 from aegis.connectors.ollama_connector import OllamaConnector
 
@@ -231,6 +232,87 @@ def list_registered_models() -> Any:
         return jsonify({"error": str(e)}), 500
 
 
+@models_bp.route("/registry/<model_id>", methods=["PUT", "PATCH"])
+def update_registered_model(model_id: str) -> Any:
+    """
+    Update a registered model's settings or metadata.
+
+    Request Body (partial):
+        {
+          "display_name": "New name",
+          "roles": ["triage", "deep_scan"],
+          "parser_id": "json_schema",
+          "settings": { "runtime": { "device": "cpu" } },
+          "merge_settings": true
+        }
+    """
+    def _merge_settings(base: dict, updates: dict) -> dict:
+        merged = dict(base or {})
+        updates = updates or {}
+        for key in ("runtime", "hf_kwargs", "generation_kwargs", "parser_config"):
+            if isinstance(updates.get(key), dict):
+                merged[key] = {**merged.get(key, {}), **updates[key]}
+        for key, value in updates.items():
+            if key in ("runtime", "hf_kwargs", "generation_kwargs", "parser_config") and isinstance(value, dict):
+                continue
+            merged[key] = value
+        return merged
+
+    try:
+        data = request.get_json() or {}
+        registry = ModelRegistryV2()
+        existing = registry.get_model(model_id)
+        if not existing:
+            return jsonify({"error": "Model not found"}), 404
+
+        display_name = data.get("display_name", existing.display_name)
+        model_name = data.get("model_name", existing.model_name)
+        parser_id = data.get("parser_id", existing.parser_id)
+
+        roles = existing.roles
+        if "roles" in data:
+            roles = parse_roles(data.get("roles") or [])
+            if not roles:
+                return jsonify({"error": "roles must not be empty"}), 400
+
+        settings = existing.settings or {}
+        if "settings" in data:
+            if data.get("merge_settings", True):
+                settings = _merge_settings(settings, data.get("settings") or {})
+            else:
+                settings = data.get("settings") or {}
+
+        status = existing.status
+        if "status" in data:
+            status = ModelStatus(data.get("status"))
+
+        availability = existing.availability
+        if "availability" in data:
+            availability = ModelAvailability(data.get("availability"))
+
+        model = registry.register_model(
+            model_id=existing.model_id,
+            model_type=existing.model_type,
+            provider_id=existing.provider_id,
+            model_name=model_name,
+            display_name=display_name,
+            roles=roles,
+            parser_id=parser_id,
+            settings=settings,
+            status=status,
+            availability=availability,
+        )
+        DEFAULT_RUNTIME_MANAGER.clear_model(model_id)
+
+        return jsonify({"model": model.model_dump()})
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Update model failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @models_bp.route("/<model_id>", methods=["DELETE"])
 def delete_model(model_id: str) -> Any:
     """Delete a registered model."""
@@ -240,6 +322,7 @@ def delete_model(model_id: str) -> Any:
 
         if not success:
             return jsonify({"error": "Model not found"}), 404
+        DEFAULT_RUNTIME_MANAGER.clear_model(model_id)
 
         return jsonify({"message": "Model deleted successfully"})
 
@@ -435,9 +518,11 @@ def register_hf_preset() -> Any:
                 base_settings["base_model_id"] = preset["base_model_id"]
             if preset.get("hf_kwargs"):
                 base_settings["hf_kwargs"] = preset.get("hf_kwargs", {})
+            if preset.get("generation_kwargs"):
+                base_settings["generation_kwargs"] = preset.get("generation_kwargs", {})
         else:
             # Generic include if present
-            for key in ["adapter_id", "base_model_id", "hf_kwargs"]:
+            for key in ["adapter_id", "base_model_id", "hf_kwargs", "generation_kwargs"]:
                 if preset.get(key):
                     base_settings[key] = preset.get(key)
 
@@ -449,6 +534,12 @@ def register_hf_preset() -> Any:
                 **user_settings["hf_kwargs"],
             }
             settings["hf_kwargs"] = merged_hf_kwargs
+        if user_settings.get("generation_kwargs") and base_settings.get("generation_kwargs"):
+            merged_gen_kwargs = {
+                **base_settings["generation_kwargs"],
+                **user_settings["generation_kwargs"],
+            }
+            settings["generation_kwargs"] = merged_gen_kwargs
 
         # Ensure HuggingFace provider exists
         registry = ModelRegistryV2()

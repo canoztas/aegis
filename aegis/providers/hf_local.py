@@ -83,6 +83,8 @@ class HFLocalProvider:
         device: Optional[str] = None,
         adapter_id: Optional[str] = None,
         base_model_id: Optional[str] = None,
+        generation_kwargs: Optional[Dict[str, Any]] = None,
+        max_workers: Optional[int] = None,
         **kwargs
     ):
         """
@@ -100,9 +102,16 @@ class HFLocalProvider:
         self.kwargs = kwargs
         self.adapter_id = adapter_id
         self.base_model_id = base_model_id
+        self.generation_kwargs = generation_kwargs or {}
 
         self._pipeline = None
-        self._executor = ThreadPoolExecutor(max_workers=1)  # Single worker for model inference
+        worker_count = 1
+        try:
+            if max_workers is not None:
+                worker_count = max(1, int(max_workers))
+        except (TypeError, ValueError):
+            worker_count = 1
+        self._executor = ThreadPoolExecutor(max_workers=worker_count)
         self._dependency_error = None
         self.dependency_error: Optional[str] = None
 
@@ -123,6 +132,25 @@ class HFLocalProvider:
             logger.info(f"Loading HF model: {self.model_id} ({self.task_type})")
             try:
                 safe_kwargs = dict(self.kwargs) if self.kwargs else {}
+
+                # Normalize torch dtype if configured
+                torch_dtype = safe_kwargs.get("torch_dtype")
+                if torch_dtype and _torch is not None:
+                    if isinstance(torch_dtype, str):
+                        dtype_key = torch_dtype.lower()
+                        if dtype_key in ("bf16", "bfloat16"):
+                            safe_kwargs["torch_dtype"] = _torch.bfloat16
+                        elif dtype_key in ("fp16", "float16"):
+                            safe_kwargs["torch_dtype"] = _torch.float16
+                        elif dtype_key in ("fp32", "float32"):
+                            safe_kwargs["torch_dtype"] = _torch.float32
+
+                if (
+                    isinstance(self.device, str)
+                    and self.device.startswith("cuda")
+                    and not _torch_cuda_available
+                ):
+                    raise RuntimeError("CUDA requested but torch reports no CUDA support.")
 
                 # Strip device_map if accelerate is missing
                 if not _accelerate_available and "device_map" in safe_kwargs:
@@ -263,17 +291,32 @@ class HFLocalProvider:
                         return output
                     return None
 
+                def _strip_prompt(text: Optional[str]) -> Optional[str]:
+                    if not text or not prompt:
+                        return text
+                    try:
+                        prompt_stripped = prompt.strip()
+                        text_stripped = text.strip()
+                        if text_stripped.startswith(prompt_stripped):
+                            remainder = text_stripped[len(prompt_stripped):].lstrip()
+                            return remainder
+                    except Exception:
+                        return text
+                    return text
+
                 # Merge default and provided kwargs
                 gen_kwargs = {
                     "max_new_tokens": 512,
                     "temperature": 0.1,
                     "do_sample": True,
                     "return_full_text": False,
-                    **generation_kwargs
                 }
+                gen_kwargs.update(self.generation_kwargs)
+                gen_kwargs.update(generation_kwargs)
 
+                # Some models echo the prompt even with return_full_text=False
                 result = self._pipeline(prompt, **gen_kwargs)
-                text = _extract_text(result)
+                text = _strip_prompt(_extract_text(result))
 
                 # Retry once with min_new_tokens if we got an empty response
                 if text is None or not str(text).strip():
@@ -281,9 +324,9 @@ class HFLocalProvider:
                     min_new_tokens = fallback_kwargs.get("min_new_tokens")
                     if not isinstance(min_new_tokens, int) or min_new_tokens <= 0:
                         max_new = fallback_kwargs.get("max_new_tokens")
-                        fallback_kwargs["min_new_tokens"] = min(16, max_new) if isinstance(max_new, int) and max_new > 0 else 16
+                        fallback_kwargs["min_new_tokens"] = min(32, max_new) if isinstance(max_new, int) and max_new > 0 else 32
                     result = self._pipeline(prompt, **fallback_kwargs)
-                    text = _extract_text(result)
+                    text = _strip_prompt(_extract_text(result))
 
                 return text if text is not None else result
 
@@ -297,6 +340,11 @@ class HFLocalProvider:
     def analyze_sync(self, prompt: str, **generation_kwargs) -> Any:
         """Synchronous version of analyze."""
         return self._analyze_sync(prompt, generation_kwargs)
+
+    def close(self) -> None:
+        """Release background executor resources."""
+        if hasattr(self, "_executor"):
+            self._executor.shutdown(wait=False)
 
     def __del__(self):
         """Cleanup executor on deletion."""
@@ -347,5 +395,12 @@ CODEASTRA_7B = {
         "device_map": "auto",
         "load_in_4bit": True,
         "trust_remote_code": True,
+    },
+    "generation_kwargs": {
+        "min_new_tokens": 32,
+        "max_new_tokens": 512,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "do_sample": True,
     },
 }

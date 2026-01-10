@@ -18,11 +18,10 @@ from werkzeug.datastructures import FileStorage
 
 from aegis.utils import allowed_file, extract_source_files
 from aegis.exports import export_sarif, export_csv
-from aegis.data_models import ScanResult, ModelResponse, Finding
+from aegis.data_models import ScanResult, Finding
 from aegis.models.registry import ModelRegistryV2 as NewModelRegistry
-from aegis.models.executor import ModelExecutionEngine
 from aegis.models.schema import ModelStatus
-from aegis.consensus.engine import ConsensusEngine
+from aegis.services.scan_service import ScanService, ScanState
 
 main_bp = Blueprint("main", __name__)
 
@@ -44,6 +43,18 @@ def get_v2_repositories():
         _scan_repo = ScanRepository()
         _finding_repo = FindingRepository()
     return _scan_repo, _finding_repo
+
+
+_scan_state = ScanState(
+    results=_scan_results,
+    status=_scan_status,
+    cancel_events=_scan_cancel_events,
+)
+_scan_service = ScanService(
+    scan_state=_scan_state,
+    use_v2=_use_v2,
+    get_v2_repositories=get_v2_repositories,
+)
 
 
 @main_bp.after_request
@@ -89,134 +100,6 @@ def scan_progress(scan_id: str) -> str:
 
 # API Routes
 # All model management endpoints moved to aegis/api/routes_models.py
-
-def _run_scan_background(scan_id: str, source_files: Dict[str, str], model_ids: List[str],
-                         consensus_strategy: str, app):
-    """Run scan in background thread using the refactored model engine."""
-    from aegis.events import EventEmitter
-
-    def _chunk_file(content: str, chunk_size: int = 800) -> List[tuple[str, int, int]]:
-        lines = content.split("\n")
-        chunks = []
-        for i in range(0, len(lines), chunk_size):
-            chunk_lines = lines[i:i + chunk_size]
-            chunk_content = "\n".join(chunk_lines)
-            line_start = i + 1
-            line_end = min(i + chunk_size, len(lines))
-            chunks.append((chunk_content, line_start, line_end))
-        return chunks
-
-    with app.app_context():
-        emitter = EventEmitter(scan_id)
-        try:
-            _scan_status[scan_id] = "running"
-            emitter.pipeline_started("multi_model_scan", "1.0")
-
-            if scan_id in _scan_cancel_events and _scan_cancel_events[scan_id].is_set():
-                _scan_status[scan_id] = "cancelled"
-                emitter.emit("cancelled", {"message": "Scan cancelled before execution"})
-                return
-
-            registry = NewModelRegistry()
-            engine = ModelExecutionEngine(registry)
-            consensus = ConsensusEngine()
-
-            per_model_findings: Dict[str, List[Finding]] = {}
-            model_responses: List[ModelResponse] = []
-
-            for model_id in model_ids:
-                model = registry.get_model(model_id)
-                if not model:
-                    emitter.warning(f"Model '{model_id}' not found", {"model_id": model_id})
-                    continue
-
-                per_model_findings[model_id] = []
-                for file_path, content in source_files.items():
-                    for chunk_content, line_start, line_end in _chunk_file(content):
-                        findings = engine.run_model_to_findings(
-                            model=model,
-                            code=chunk_content,
-                            file_path=file_path,
-                            role=model.roles[0] if model.roles else None,
-                            line_start=line_start,
-                            line_end=line_end,
-                        )
-                        per_model_findings[model_id].extend(findings)
-                        for finding in findings:
-                            emitter.finding_emitted(finding.to_dict(), model_id)
-
-                model_responses.append(
-                    ModelResponse(
-                        model_id=model_id,
-                        findings=per_model_findings[model_id],
-                        usage={},
-                    )
-                )
-
-            if not model_responses:
-                raise ValueError("No runnable models found for scan")
-
-            consensus_findings = consensus.merge(
-                model_responses,
-                strategy=consensus_strategy or "union",
-            )
-
-            scan_result = ScanResult(
-                scan_id=scan_id,
-                consensus_findings=consensus_findings,
-                per_model_findings=per_model_findings,
-                scan_metadata={
-                    "models": model_ids,
-                    "strategy": consensus_strategy,
-                    "files_scanned": len(source_files),
-                    "total_findings": len(consensus_findings),
-                },
-                source_files=source_files,
-            )
-
-            if scan_id in _scan_cancel_events and _scan_cancel_events[scan_id].is_set():
-                _scan_status[scan_id] = "cancelled"
-                emitter.emit("cancelled", {"message": "Scan cancelled"})
-                return
-
-            _scan_results[scan_id] = scan_result
-            _scan_status[scan_id] = "completed"
-
-            if _use_v2:
-                scan_repo, finding_repo = get_v2_repositories()
-                try:
-                    scan_repo.update_status(scan_id, 'completed')
-                    scan_repo.update_progress(
-                        scan_id,
-                        total_files=len(source_files),
-                        processed_files=len(source_files)
-                    )
-
-                    finding_repo.create_batch(
-                        scan_result.consensus_findings,
-                        scan_id,
-                        is_consensus=True
-                    )
-                    for model_id, findings in scan_result.per_model_findings.items():
-                        finding_repo.create_batch(
-                            findings,
-                            scan_id,
-                            model_id=model_id,
-                            is_consensus=False
-                        )
-                except Exception as e:
-                    print(f"Warning: Failed to persist scan to database: {e}")
-
-            emitter.pipeline_completed(len(scan_result.consensus_findings), 0)
-
-        except Exception as e:
-            _scan_status[scan_id] = "failed"
-            emitter.error(str(e))
-        finally:
-            if scan_id in _scan_cancel_events:
-                del _scan_cancel_events[scan_id]
-
-
 @main_bp.route("/api/scan", methods=["POST"])
 def create_scan() -> Any:
     """Create a new scan (runs in background)."""
@@ -297,7 +180,7 @@ def create_scan() -> Any:
 
         # Start background scan
         thread = threading.Thread(
-            target=_run_scan_background,
+            target=_scan_service.run_background,
             args=(scan_id, source_files, valid_model_ids, consensus_strategy, current_app._get_current_object())
         )
         thread.daemon = True
@@ -455,7 +338,7 @@ def retry_scan(scan_id: str) -> Any:
 
             # Start background scan
             thread = threading.Thread(
-                target=_run_scan_background,
+                target=_scan_service.run_background,
                 args=(new_scan_id, source_files, model_ids, consensus_strategy, current_app._get_current_object())
             )
             thread.daemon = True

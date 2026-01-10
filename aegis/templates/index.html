@@ -1,155 +1,198 @@
 {% extends "base.html" %}
-{% block title %}aegis - AI Security Scanner{% endblock %}
+{% block title %}Aegis of the Vulnerable{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mb-5 fade-in">
-  <div class="col-md-10 col-lg-8 text-center">
-    <div class="d-flex align-items-center justify-content-center gap-3 mb-4">
-      <img src="{{ url_for('static', filename='img/aegis-logo.svg') }}" alt="Aegis"
-        style="height: 80px; filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.3));">
-    </div>
-    <h1 class="display-5 fw-bold mb-3">
-      AI-Powered <span
-        style="background: linear-gradient(135deg, var(--brand-primary), var(--status-info)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Security
-        Analysis</span>
-    </h1>
-    <p class="lead text-muted mb-4">
-      Detect vulnerabilities with the consensus of multiple LLMs. <br>
-      Secure your code with next-generation static analysis.
-    </p>
-  </div>
-</div>
+<div class="container py-5" style="max-width: 900px;">
+  <form id="scanForm" enctype="multipart/form-data">
 
-<div class="row justify-content-center fade-in animate-delay-1">
-  <div class="col-md-10 col-lg-8">
-    <div class="card card-glass border-0">
-      <div class="card-body p-4 p-lg-5">
-        <h4 class="card-title mb-4 d-flex align-items-center">
-          <i class="bi bi-rocket-takeoff me-2 text-primary"></i> Start New Scan
-        </h4>
+    <!-- Section 1: Target Scope -->
+    <div class="mb-5 fade-in" style="animation-delay: 0.1s;">
+      <h5 class="fw-bold mb-3 text-uppercase text-secondary small tracking-wider"><i class="bi bi-crosshair me-2"></i>
+        Phase I: Pick your code</h5>
 
-        <form id="scanForm" enctype="multipart/form-data">
-          <!-- File Upload -->
-          <div class="mb-5">
-            <label class="form-label d-block mb-3">Source Code <span
-                class="badge bg-secondary opacity-50 ms-2">ZIP</span></label>
-            <div id="dropArea" class="upload-area">
-              <i class="bi bi-cloud-arrow-up upload-icon"></i>
-              <h5 class="fw-bold">Drag & Drop Source Code</h5>
-              <p class="text-muted mb-4">Support for ZIP archives up to 50MB</p>
-
-              <input type="file" id="fileInput" name="file" accept=".zip" class="d-none" required />
-              <button type="button" id="browseBtn" class="btn btn-outline-primary px-4 py-2 rounded-pill">
-                Browse Files
-              </button>
+      <div class="card bg-panel border-subtle shadow-lg">
+        <div class="card-body p-0">
+          <!-- Default State -->
+          <div id="dropArea" class="upload-area p-5 text-center cursor-pointer position-relative overflow-hidden group">
+            <!-- Background Effect -->
+            <div
+              class="position-absolute top-0 start-0 w-100 h-100 bg-gradient-to-b from-transparent to-primary opacity-5 group-hover-opacity-10 transition-all">
             </div>
 
-            <div id="fileInfo" class="alert alert-info mt-3 shadow-none border d-flex align-items-center"
-              style="display: none">
-              <i class="bi bi-file-zip-fill fs-4 me-3"></i>
-              <div>
-                <strong id="fileName" class="d-block">filename.zip</strong>
-                <small class="text-muted" id="fileSize">1.2 MB</small>
+            <div class="position-relative z-1">
+              <div class="mb-3">
+                <!-- Aegis Icon -->
+                <img src="{{ url_for('static', filename='img/aegis-icon.svg') }}" width="80" height="80"
+                  class="group-hover-glow transition-all mb-2"
+                  style="filter: drop-shadow(0 0 5px rgba(44,140,127,0.2)); opacity: 0.8;">
               </div>
-              <button type="button" class="btn-close ms-auto" id="removeFileBtn"></button>
+              <h4 class="fw-bold text-light mb-1">DROP_SOURCE_CODE</h4>
+              <p class="text-secondary small font-monospace mb-4">ACCEPTED_FORMATS: .ZIP</p>
+              <button type="button" id="browseBtn"
+                class="btn btn-outline-secondary btn-sm font-monospace text-uppercase rounded-0 px-4">Initialize Manual
+                Upload</button>
             </div>
+
+            <input type="file" id="fileInput" name="file" accept=".zip" class="d-none" required />
+
+
           </div>
 
-          <div class="row g-4 mb-4">
-            <!-- Model Selection -->
-            <div class="col-md-7">
-              <label class="form-label">AI Models</label>
-              <select id="modelsSelect" class="form-select" multiple size="4" required style="height: 140px;">
-                <option value="" disabled>Loading models...</option>
-              </select>
-              <div class="d-flex justify-content-between mt-2">
-                <small class="text-muted">
-                  <i class="bi bi-command"></i> Ctrl/Cmd + Click to select multiple
-                </small>
-                <a href="{{ url_for('main.models_page') }}" class="text-decoration-none small fw-bold">
-                  Manage Models <i class="bi bi-arrow-right"></i>
-                </a>
+          <!-- Locked State -->
+          <div id="fileInfo"
+            class="d-none p-4 d-flex align-items-center justify-content-between bg-surface mx-2 my-2 rounded-1 border border-primary border-opacity-25">
+            <div class="d-flex align-items-center gap-3">
+              <div class="text-primary fs-3"><i class="bi bi-check-circle-fill"></i></div>
+              <div>
+                <div class="font-monospace text-uppercase small text-secondary">Target Locked</div>
+                <div class="fw-bold text-light fs-5" id="fileName">TARGET.ZIP</div>
+                <div class="font-monospace text-secondary extra-small" id="fileSize">-- MB</div>
               </div>
             </div>
+            <button type="button" id="removeFileBtn"
+              class="btn btn-icon text-secondary hover-text-danger transition-colors">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
 
-            <!-- Consensus Strategy -->
-            <div class="col-md-5">
-              <label class="form-label">Consensus Strategy</label>
-              <div class="bg-surface p-3 rounded-3 border border-subtle h-100">
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="radio" name="consensusStrategy" id="strategyUnion" value="union"
-                    checked>
-                  <label class="form-check-label" for="strategyUnion">
-                    <strong>Union</strong>
-                    <div class="small text-muted">Merge all findings</div>
-                  </label>
-                </div>
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="radio" name="consensusStrategy" id="strategyMajority"
-                    value="majority_vote">
-                  <label class="form-check-label" for="strategyMajority">
-                    <strong>Majority Vote</strong>
-                    <div class="small text-muted">>50% agreement</div>
-                  </label>
-                </div>
-                <div class="form-check mb-2">
-                  <input class="form-check-input" type="radio" name="consensusStrategy" id="strategyWeighted"
-                    value="weighted_vote">
-                  <label class="form-check-label" for="strategyWeighted">
-                    <strong>Weighted</strong>
-                    <div class="small text-muted">Confidence-based</div>
-                  </label>
-                </div>
-                <div class="form-check">
-                  <input class="form-check-input" type="radio" name="consensusStrategy" id="strategyJudge"
-                    value="judge">
-                  <label class="form-check-label" for="strategyJudge">
-                    <strong>Judge Model</strong>
-                    <div class="small text-muted">AI Arbitration</div>
-                  </label>
+    <!-- Section 2: Configuration -->
+    <div class="mb-5 fade-in" style="animation-delay: 0.2s;">
+      <h5 class="fw-bold mb-3 text-uppercase text-secondary small tracking-wider"><i
+          class="bi bi-grid-3x3-gap me-2"></i> Phase II: Select Strategy</h5>
+
+      <div class="row g-4">
+        <!-- Active Models UI -->
+        <div class="col-md-7">
+          <div class="card bg-panel border-subtle h-100 shadow-sm">
+            <div class="card-header bg-transparent border-bottom border-subtle py-3">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="small fw-bold text-uppercase text-light font-monospace">Deployed Models</span>
+                <span class="badge bg-primary bg-opacity-10 text-primary font-monospace rounded-0"
+                  id="modelCountBadge">0 SELECTED</span>
+              </div>
+            </div>
+            <div class="card-body p-3">
+              <div id="modelPicker" class="d-flex flex-wrap gap-2" style="min-height: 150px;">
+                <div
+                  class="text-muted small font-monospace d-flex align-items-center w-100 justify-content-center h-100 opacity-50">
+                  INITIALIZING_REGISTRY...
                 </div>
               </div>
+              <select id="modelsSelect" name="models" class="d-none" multiple></select>
+            </div>
+          </div>
+        </div>
 
-              <!-- Judge Model Selection (Hidden by default) -->
-              <div id="judgeModelSelect" class="mt-3 fade-in" style="display: none;">
-                <label class="form-label small">Select Judge Model</label>
-                <select id="judgeModelId" class="form-select form-select-sm">
-                  <option value="">Select judge model...</option>
+        <!-- Strategy -->
+        <div class="col-md-5">
+          <div class="card bg-panel border-subtle h-100 shadow-sm">
+            <div class="card-header bg-transparent border-bottom border-subtle py-3">
+              <span class="small fw-bold text-uppercase text-light font-monospace">Consensus Protocol</span>
+            </div>
+            <div class="card-body p-3">
+              <div class="d-flex flex-column gap-2">
+                <label
+                  class="strategy-card cursor-pointer p-3 border border-subtle rounded-1 bg-surface hover-bg-light transition-all position-relative">
+                  <input type="radio" name="consensusStrategy" value="union" checked class="d-none peer">
+                  <div class="d-flex align-items-center gap-3">
+                    <i class="bi bi-union fs-5 text-secondary peer-checked-text-primary"></i>
+                    <div>
+                      <div class="fw-bold text-light peer-checked-text-primary text-uppercase small">Union</div>
+                      <div class="extra-small text-secondary">Merge all vectors</div>
+                    </div>
+                  </div>
+                  <div
+                    class="position-absolute top-0 start-0 w-1 h-100 bg-primary opacity-0 peer-checked-opacity-100 transition-all">
+                  </div>
+                </label>
+
+                <label
+                  class="strategy-card cursor-pointer p-3 border border-subtle rounded-1 bg-surface hover-bg-light transition-all position-relative">
+                  <input type="radio" name="consensusStrategy" value="majority_vote" class="d-none peer">
+                  <div class="d-flex align-items-center gap-3">
+                    <i class="bi bi-people fs-5 text-secondary peer-checked-text-primary"></i>
+                    <div>
+                      <div class="fw-bold text-light peer-checked-text-primary text-uppercase small">Majority</div>
+                      <div class="extra-small text-secondary">Vote threshold > 50%</div>
+                    </div>
+                  </div>
+                  <div
+                    class="position-absolute top-0 start-0 w-1 h-100 bg-primary opacity-0 peer-checked-opacity-100 transition-all">
+                  </div>
+                </label>
+
+                <label
+                  class="strategy-card cursor-pointer p-3 border border-subtle rounded-1 bg-surface hover-bg-light transition-all position-relative">
+                  <input type="radio" name="consensusStrategy" value="judge" class="d-none peer">
+                  <div class="d-flex align-items-center gap-3">
+                    <img src="{{ url_for('static', filename='img/judge-icon.svg') }}" width="24" height="24"
+                      class="opacity-75" style="filter: invert(1);">
+                    <div>
+                      <!-- Changed Label to Judge Model -->
+                      <div class="fw-bold text-light peer-checked-text-primary text-uppercase small">Judge Model</div>
+                      <div class="extra-small text-secondary">LLM Validation</div>
+                    </div>
+                  </div>
+                  <div
+                    class="position-absolute top-0 start-0 w-1 h-100 bg-primary opacity-0 peer-checked-opacity-100 transition-all">
+                  </div>
+                </label>
+              </div>
+
+              <div id="judgeModelSelect" class="mt-3 d-none fade-in">
+                <select id="judgeModelId"
+                  class="form-select form-select-sm bg-black border-subtle text-light font-monospace rounded-0">
+                  <option value="">SELECT_JUDGE...</option>
                 </select>
               </div>
             </div>
           </div>
-
-          <div class="d-grid mt-5">
-            <button type="submit" id="scanBtn" class="btn btn-primary btn-lg py-3 shadow-lg" disabled>
-              <i class="bi bi-search me-2"></i> Start Security Analysis
-            </button>
-          </div>
-        </form>
+        </div>
       </div>
     </div>
-  </div>
+
+    <!-- Section 3: Action -->
+    <div class="card bg-panel border-primary border-opacity-25 shadow-lg mt-5 fade-in"
+      style="animation-delay: 0.3s; border-left: 4px solid var(--brand-primary);">
+      <div class="card-body p-4 d-flex align-items-center justify-content-between">
+        <div>
+          <!-- New Title and Color -->
+          <h5 class="fw-bold mb-1 text-aegis-gold font-monospace spacing-wide">AEGIS OF THE VULNERABLE <span
+              class="text-light opacity-50 ms-2" style="font-size: 0.7em;">SYSTEM_ONLINE</span></h5>
+          <div class="text-secondary font-monospace extra-small mt-2" style="letter-spacing: 0.2em;">SYSTEM_READY</div>
+        </div>
+        <!-- New Button Style and Text -->
+        <button type="submit" id="scanBtn"
+          class="btn btn-aegis-dota px-5 py-3 rounded-0 d-flex align-items-center gap-2" disabled>
+          <i class="bi bi-shield-shaded"></i> ACTIVATE_AEGIS
+        </button>
+      </div>
+    </div>
+
+  </form>
 </div>
+{% endblock %}
 
-<!-- Progress Overlay -->
-<div id="scanProgress" class="position-fixed top-0 start-0 w-100 h-100 d-none"
-  style="background: var(--glass-bg); backdrop-filter: blur(10px); z-index: 2000;">
-  <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4">
-    <div class="card card-glass border-0 shadow-lg" style="max-width: 500px; width: 100%;">
-      <div class="card-body text-center p-5">
-        <div class="mb-4">
-          <div class="spinner-border text-primary" role="status" style="width: 4rem; height: 4rem;">
-            <span class="visually-hidden">Loading...</span>
-          </div>
+{% block modals %}
+<div class="modal fade" id="scanProgressModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-panel border border-primary shadow-lg rounded-0">
+      <div class="modal-body p-5 text-center position-relative overflow-hidden">
+        <!-- Scanline Effect -->
+        <div class="position-absolute top-0 start-0 w-100 h-100"
+          style="background: linear-gradient(transparent 50%, rgba(0,0,0,0.2) 50%); background-size: 100% 4px; pointer-events: none;">
         </div>
-        <h3 class="fw-bold mb-2">Scanning In Progress</h3>
-        <p class="text-muted mb-4">Analyzing source code structure and identifying vulnerabilities...</p>
 
-        <div class="progress" style="height: 8px;">
-          <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar"
-            style="width: 100%"></div>
+        <div class="spinner-border text-primary mb-4"
+          style="width: 3rem; height: 3rem; --bs-spinner-border-width: 2px;"></div>
+        <h5 class="fw-bold mb-2 font-monospace text-light">ANALYZING_TARGET_VECTORS</h5>
+        <p class="text-primary small mb-4 font-monospace blink">NEURAL_NETWORKS_ACTIVE...</p>
+        <div class="progress rounded-0 bg-black" style="height: 4px;">
+          <div class="progress-bar bg-primary shadow-none" style="width: 100%"></div>
         </div>
-        <div class="mt-3 text-muted small">This may take a few minutes.</div>
       </div>
     </div>
   </div>
@@ -159,26 +202,171 @@
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/scan.js') }}"></script>
 <script>
-  // Add Remove File functionality which was missing in original
-  document.getElementById('removeFileBtn')?.addEventListener('click', function () {
-    document.getElementById('fileInput').value = '';
-    document.getElementById('fileInfo').style.display = 'none';
-    document.getElementById('dropArea').style.display = 'block';
-    document.getElementById('scanBtn').disabled = true;
+  // Custom Model Picker Logic
+  const modelPicker = document.getElementById('modelPicker');
+  const select = document.getElementById('modelsSelect');
+  const countBadge = document.getElementById('modelCountBadge');
+
+  const observerSelect = new MutationObserver(() => {
+    refreshModelPicker();
+  });
+  observerSelect.observe(select, { childList: true });
+
+  function refreshModelPicker() {
+    modelPicker.innerHTML = '';
+    if (select.options.length === 0) {
+      modelPicker.innerHTML = '<div class="text-muted small font-monospace w-100 text-center">NO_MODELS_FOUND</div>';
+      return;
+    }
+
+    Array.from(select.options).forEach(opt => {
+      const chip = document.createElement('div');
+      chip.className = `model-chip cursor-pointer text-secondary border border-subtle bg-surface px-3 py-2 rounded-1 d-flex align-items-center gap-2 transition-all hover-border-primary user-select-none small font-monospace ${opt.selected ? 'active bg-primary bg-opacity-10 border-primary text-light' : ''}`;
+      chip.innerHTML = `<i class="bi bi-cpu"></i> ${opt.text}`;
+
+      chip.addEventListener('click', () => {
+        opt.selected = !opt.selected;
+        refreshModelPicker();
+      });
+
+      modelPicker.appendChild(chip);
+    });
+
+    const count = Array.from(select.selectedOptions).length;
+    countBadge.textContent = `${count} SELECTED`;
+    countBadge.className = `badge font-monospace rounded-0 ${count > 0 ? 'bg-primary text-white' : 'bg-secondary bg-opacity-10 text-secondary'}`;
+
+    const scanBtn = document.getElementById('scanBtn');
+    const fileSet = document.getElementById('fileInput').files.length > 0 || document.getElementById('fileName').textContent === 'demo_project_source.zip';
+
+    if (scanBtn) scanBtn.disabled = !(count > 0 && fileSet);
+  }
+
+  const dropArea = document.getElementById('dropArea');
+  const fileInput = document.getElementById('fileInput');
+  const browseBtn = document.getElementById('browseBtn');
+  const fileInfo = document.getElementById('fileInfo');
+  const removeBtn = document.getElementById('removeFileBtn');
+  const fileName = document.getElementById('fileName');
+  const frameSize = document.getElementById('fileSize');
+
+  [dropArea, browseBtn].forEach(el => el.addEventListener('click', () => fileInput.click()));
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      fileName.textContent = file.name;
+      frameSize.textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+      dropArea.classList.add('d-none');
+      fileInfo.classList.remove('d-none');
+      refreshModelPicker();
+    }
   });
 
-  // Simple logic to show/hide Judge selection
+  removeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    fileInput.value = '';
+    dropArea.classList.remove('d-none');
+    fileInfo.classList.add('d-none');
+    refreshModelPicker();
+  });
+
+  document.getElementById('loadSampleBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    fileName.textContent = 'demo_project_source.zip';
+    frameSize.textContent = '4.2 MB';
+    dropArea.classList.add('d-none');
+    fileInfo.classList.remove('d-none');
+    refreshModelPicker();
+  });
+
   document.querySelectorAll('input[name="consensusStrategy"]').forEach(radio => {
     radio.addEventListener('change', function () {
       const judgeDiv = document.getElementById('judgeModelSelect');
       if (this.value === 'judge') {
-        judgeDiv.style.display = 'block';
-        setTimeout(() => judgeDiv.style.opacity = 1, 10);
+        judgeDiv.classList.remove('d-none');
       } else {
-        judgeDiv.style.display = 'none';
-        judgeDiv.style.opacity = 0;
+        judgeDiv.classList.add('d-none');
       }
     });
   });
 </script>
+
+<div id="scanProgress" class="d-none"></div>
+<script>
+  const shim = document.getElementById('scanProgress');
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+        const modalEl = document.getElementById('scanProgressModal');
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        if (!shim.classList.contains('d-none')) {
+          modal.show();
+        } else {
+          modal.hide();
+        }
+      }
+    });
+  });
+  observer.observe(shim, { attributes: true });
+</script>
+
+<style>
+  .strategy-card input:checked~div i,
+  .strategy-card input:checked~div div.fw-bold {
+    color: var(--brand-primary) !important;
+  }
+
+  .hover-border-primary:hover {
+    border-color: var(--brand-hover) !important;
+    color: var(--text-main) !important;
+  }
+
+  .bg-gradient-to-b {
+    background: linear-gradient(to bottom, var(--tw-gradient-stops));
+  }
+
+  .from-transparent {
+    --tw-gradient-from: transparent;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(0, 0, 0, 0));
+  }
+
+  .to-primary {
+    --tw-gradient-to: rgba(44, 140, 127, 0.2);
+  }
+
+  .hover-op-100:hover {
+    opacity: 1 !important;
+  }
+
+  .op-75 {
+    opacity: 0.75;
+  }
+
+  .extra-small {
+    font-size: 0.75rem;
+  }
+
+  .group:hover .group-hover-glow {
+    filter: drop-shadow(0 0 15px var(--brand-primary));
+    opacity: 1 !important;
+    transform: scale(1.1);
+  }
+
+  .group:hover .group-hover-text-primary {
+    color: var(--brand-hover) !important;
+  }
+
+  .group:hover .group-hover-opacity-10 {
+    opacity: 0.1 !important;
+  }
+
+  .hover-text-danger:hover {
+    color: var(--brand-secondary) !important;
+  }
+
+  .spacing-wide {
+    letter-spacing: 0.1em;
+  }
+</style>
 {% endblock %}

@@ -1,143 +1,124 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>
-      {% block title %}aegis - AI Security Scanner{% endblock %}
-    </title>
 
-    <!-- Bootstrap 5 -->
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
-      rel="stylesheet"
-    />
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css"
-      rel="stylesheet"
-    />
-    
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    
-    <!-- Modern Design System -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/code-snippet.css') }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Aegis of the Vulnerable{% endblock %}</title>
 
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/aegis-icon.svg') }}">
-    
-    <!-- Pre-load Theme Script to prevent flash -->
-    <script>
-      (function() {
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-      })();
-    </script>
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet" />
 
-    {% block head %}{% endblock %}
-  </head>
-  <body>
-    <nav class="navbar navbar-expand-lg navbar-glass">
-      <div class="container">
-        <a class="navbar-brand" href="{{ url_for('main.index') }}">
-          <img src="{{ url_for('static', filename='img/aegis-icon.svg') }}" alt="Aegis Logo" height="32">
-          <span>aegis</span>
-        </a>
-        <button
-          class="navbar-toggler"
-          type="button"
-          data-bs-toggle="collapse"
-          data-bs-target="#navbarNav"
-        >
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-          <ul class="navbar-nav ms-auto align-items-center gap-2">
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.index') }}">
-                <i class="bi bi-shield-check me-1"></i> Scan
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.history_page') }}">
-                <i class="bi bi-clock-history me-1"></i> History
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link" href="{{ url_for('main.models_page') }}">
-                <i class="bi bi-cpu me-1"></i> Models
-              </a>
-            </li>
-            <li class="nav-item ms-lg-2">
-              <button class="btn btn-link nav-link" id="themeToggle" title="Toggle Theme">
-                <i class="bi bi-moon-stars" id="themeIcon"></i>
-              </button>
-            </li>
-          </ul>
-        </div>
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
+    rel="stylesheet">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/code-snippet.css') }}">
+
+  {% block head %}{% endblock %}
+</head>
+
+<body class="d-flex flex-column min-vh-100">
+  <nav class="navbar navbar-expand-lg border-bottom border-subtle bg-panel sticky-top"
+    style="backdrop-filter: blur(10px); background-color: rgba(15, 18, 22, 0.95);">
+    <div class="container-fluid px-4" style="max-width: 1600px;">
+      <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('main.index') }}">
+        <img src="{{ url_for('static', filename='img/aegis-icon.svg') }}" alt="Aegis Logo" width="32" height="32"
+          style="filter: drop-shadow(0 0 5px rgba(44,140,127,0.5));">
+        <span class="fw-bold tracking-tight text-light font-monospace"
+          style="letter-spacing: 0.15em; font-size: 1.25rem;">AEGIS</span>
+      </a>
+      <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto align-items-center gap-1">
+          <li class="nav-item">
+            <a class="nav-link px-4 {% if request.endpoint == 'main.index' %}active text-primary{% endif %}"
+              href="{{ url_for('main.index') }}">
+              SCAN
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link px-4 {% if request.endpoint == 'main.models_page' %}active text-primary{% endif %}"
+              href="{{ url_for('main.models_page') }}">
+              MODELS
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link px-4 {% if request.endpoint == 'main.history_page' %}active text-primary{% endif %}"
+              href="{{ url_for('main.history_page') }}">
+              HISTORY
+            </a>
+          </li>
+        </ul>
       </div>
-    </nav>
-
-    {% with messages = get_flashed_messages() %} {% if messages %}
-    <div class="container mt-4 animate-delay-1 fade-in">
-      {% for message in messages %}
-      <div class="alert alert-warning alert-dismissible fade show shadow-sm" role="alert">
-        {{ message }}
-        <button
-          type="button"
-          class="btn-close"
-          data-bs-dismiss="alert"
-        ></button>
-      </div>
-      {% endfor %}
     </div>
-    {% endif %} {% endwith %}
+  </nav>
 
-    <main class="container py-4 fade-in">
-      {% block content %}{% endblock %}
-    </main>
+  <!-- Flash Messages -->
+  {% with messages = get_flashed_messages() %} {% if messages %}
+  <div class="container mt-4 animate-delay-1 fade-in">
+    {% for message in messages %}
+    <div
+      class="alert alert-info border-primary bg-panel shadow-sm d-flex align-items-center rounded-0 font-monospace small text-primary"
+      role="alert" style="border-left-width: 4px;">
+      <i class="bi bi-info-circle-fill me-3"></i>
+      <div>{{ message }}</div>
+      <button type="button" class="btn-close btn-close-white ms-auto" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %} {% endwith %}
 
-    <footer class="footer-custom">
-      <div class="container text-center">
-        <p class="text-muted mb-0 small">
-          &copy; 2025 Aegis Security. AI-Powered Analysis.
-        </p>
-      </div>
-    </footer>
+  <main class="flex-grow-1">
+    {% block content %}{% endblock %}
+  </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
-    <script>
-      // Modern Theme Toggle
-      document.addEventListener('DOMContentLoaded', () => {
-        const themeToggle = document.getElementById('themeToggle');
-        const themeIcon = document.getElementById('themeIcon');
-        const html = document.documentElement;
-        
-        // Initial Icon State
-        const currentTheme = html.getAttribute('data-theme') || 'dark';
-        updateIcon(currentTheme);
+  <footer class="mt-auto py-3 border-top border-subtle bg-panel">
+    <div class="container-fluid px-4 d-flex justify-content-between align-items-center text-muted small"
+      style="max-width: 1600px;">
+      <span class="font-monospace">&copy; 2025 AEGIS OF THE VULNERABLE</span>
+      <span class="font-monospace text-secondary opacity-50">V.2.1-TACTICAL</span>
+    </div>
+  </footer>
 
-        themeToggle?.addEventListener('click', () => {
-          const current = html.getAttribute('data-theme');
-          const next = current === 'dark' ? 'light' : 'dark';
-          
-          html.setAttribute('data-theme', next);
-          localStorage.setItem('theme', next);
-          updateIcon(next);
-        });
+  {% block modals %}{% endblock %}
 
-        function updateIcon(theme) {
-          if (themeIcon) {
-            themeIcon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
-          }
-        }
-      });
-    </script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    {% block scripts %}{% endblock %}
-  </body>
+  <style>
+    .nav-link {
+      color: var(--text-secondary);
+      font-family: var(--font-monospace);
+      font-size: 0.8rem;
+      letter-spacing: 0.1em;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+
+    .nav-link:hover {
+      color: var(--brand-hover);
+      text-shadow: 0 0 10px var(--brand-glow);
+    }
+
+    .nav-link.active {
+      color: var(--brand-primary);
+    }
+
+    .navbar-toggler-icon {
+      filter: invert(1);
+    }
+  </style>
+
+  {% block scripts %}{% endblock %}
+</body>
+
 </html>

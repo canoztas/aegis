@@ -1,287 +1,130 @@
-/* Main Stylesheet referencing theme.css variables */
+/* ===================================
+   AEGIS - TACTICAL OPS EXTENDED
+   =================================== */
 
+/* Override Bootstrap Defaults for Dark Theme */
 body {
   background-color: var(--bg-app);
   color: var(--text-main);
-  font-family: var(--font-sans);
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  -webkit-font-smoothing: antialiased;
-  transition: background-color 0.3s ease, color 0.3s ease;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
 }
 
-main {
-  flex: 1;
-}
-
-/* Typography Overrides */
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  color: var(--text-main);
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  /* Tight tracking for modern feel */
-}
-
-a {
-  color: var(--brand-primary);
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-a:hover {
-  color: var(--brand-hover);
-}
-
-.text-muted {
-  color: var(--text-secondary) !important;
-}
-
-/* 
- * Glassmorphism Components 
- */
-
-/* Navbar */
-.navbar-glass {
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border-bottom: 1px solid var(--border-subtle);
-  position: sticky;
-  top: 0;
-  z-index: 1000;
-  transition: border-color 0.3s ease;
-}
-
-.navbar-brand {
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: var(--text-main) !important;
-}
-
-.navbar-brand span {
-  background: linear-gradient(135deg, var(--brand-primary), var(--status-info));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.nav-link {
-  color: var(--text-secondary) !important;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.nav-link:hover,
-.nav-link.active {
-  color: var(--brand-primary) !important;
-}
-
-/* Cards */
 .card {
   background-color: var(--bg-panel);
+  /* Fix: Override Bootstrap white */
+  color: var(--text-main);
+  border-radius: var(--panel-radius);
   border: 1px solid var(--border-subtle);
-  border-radius: 1rem;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.3s ease;
 }
 
-.card-glass {
-  background: var(--bg-panel);
-  /* Fallback */
-  position: relative;
-  overflow: hidden;
+.modal-content {
+  background-color: var(--bg-panel);
+  color: var(--text-main);
+  border: 1px solid var(--border-subtle);
 }
 
-[data-theme="dark"] .card-glass {
-  background: var(--glass-bg);
-  /* Only use glass in dark mode for depth */
-  border: 1px solid var(--glass-border);
-}
-
-.card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-2px);
-  border-color: var(--brand-primary);
-}
-
-.card-header {
-  background-color: transparent;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 1.5rem;
-  font-weight: 600;
-}
-
-.card-body {
-  padding: 1.5rem;
-}
-
-/* Buttons */
-.btn {
-  font-weight: 600;
-  padding: 0.6rem 1.25rem;
-  border-radius: 0.75rem;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  letter-spacing: 0.01em;
-}
-
-.btn-primary {
-  background-color: var(--brand-primary);
-  border: 1px solid var(--brand-primary);
-  box-shadow: 0 4px 14px 0 var(--brand-glow);
-}
-
-.btn-primary:hover {
-  background-color: var(--brand-hover);
-  border-color: var(--brand-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-
-.btn-outline-primary {
-  color: var(--brand-primary);
-  border-color: var(--brand-primary);
-}
-
-.btn-outline-primary:hover {
-  background-color: var(--brand-primary);
-  border-color: var(--brand-primary);
-}
-
-/* Form Elements */
 .form-control,
 .form-select {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-main);
-  border-radius: 0.75rem;
-  padding: 0.75rem 1rem;
-  transition: all 0.2s ease;
+  background-color: var(--bg-surface) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-main) !important;
 }
 
 .form-control:focus,
 .form-select:focus {
-  background-color: var(--bg-surface);
-  border-color: var(--brand-primary);
-  box-shadow: 0 0 0 4px var(--brand-glow);
+  background-color: var(--bg-surface) !important;
+  color: var(--text-main) !important;
+  border-color: var(--brand-primary) !important;
+  box-shadow: 0 0 0 0.25rem var(--brand-glow) !important;
+}
+
+/* Fix List Groups (The source of the white background issue) */
+.list-group-item {
+  background-color: var(--bg-panel);
+  border-color: var(--border-subtle);
   color: var(--text-main);
 }
 
-.form-label {
-  color: var(--text-secondary);
-  font-weight: 500;
-  margin-bottom: 0.5rem;
+/* Tab Fixes */
+.nav-tabs {
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-/* Upload Area */
-.upload-area {
-  background-color: var(--bg-surface);
-  border: 2px dashed var(--border-subtle);
-  border-radius: 1.5rem;
-  padding: 4rem 2rem;
-  text-align: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.nav-tabs .nav-link {
+  color: var(--text-secondary);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  transition: all 0.2s;
+}
+
+.nav-tabs .nav-link:hover {
+  color: var(--brand-hover);
+  border-color: transparent;
+  isolation: isolate;
+  /* Fix z-index issues */
+}
+
+.nav-tabs .nav-link.active {
+  color: var(--brand-primary);
+  background-color: transparent !important;
+  /* No white background */
+  border-bottom: 2px solid var(--brand-primary);
+}
+
+/* Button & Interactives */
+.btn-check:focus+.btn,
+.btn:focus {
+  box-shadow: 0 0 0 0.25rem var(--brand-glow);
+}
+
+/* AEGIS DOTA THEME EXTRAS */
+
+/* Text: Aegis Gold Gradient */
+.text-aegis-gold {
+  background: linear-gradient(to right, #bf953f, #fcf6ba, #b38728, #fbf5b7, #aa771c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 10px rgba(191, 149, 63, 0.3);
+}
+
+/* Button: Dota 2 Clash Gradient (Red/Gold/Dark) */
+.btn-aegis-dota {
+  background: linear-gradient(135deg, #5b1212 0%, #8a2424 50%, #b38728 100%);
+  border: 1px solid #b38728;
+  color: #ffd700;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), inset 0 0 10px rgba(255, 215, 0, 0.1);
+  transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
 }
 
-.upload-area:hover {
-  border-color: var(--brand-primary);
-  background-color: var(--bg-panel);
-  transform: scale(1.01);
+.btn-aegis-dota:hover:not(:disabled) {
+  background: linear-gradient(135deg, #751a1a 0%, #a32e2e 50%, #d4a035 100%);
+  box-shadow: 0 0 20px rgba(179, 135, 40, 0.4), inset 0 0 15px rgba(255, 215, 0, 0.2);
+  color: #fff;
+  transform: translateY(-1px);
 }
 
-.upload-area.dragover {
-  border-color: var(--brand-primary);
-  background-color: rgba(99, 102, 241, 0.05);
-  box-shadow: inset 0 0 20px var(--brand-glow);
-}
-
-.upload-icon {
-  font-size: 3rem;
-  color: var(--text-muted);
-  margin-bottom: 1rem;
-  transition: color 0.3s ease;
-}
-
-.upload-area:hover .upload-icon {
-  color: var(--brand-primary);
-  transform: translateY(-5px);
-}
-
-/* Vulnerability Cards & Badges */
-.vulnerability-card {
-  border-left: 5px solid transparent;
-  /* Replaced by badge usually, but keeping for legacy compat */
-  position: relative;
-}
-
-[data-theme="dark"] .vulnerability-card {
-  border: 1px solid var(--glass-border);
-}
-
-.badge {
-  padding: 0.5em 0.8em;
-  font-weight: 600;
-  border-radius: 6px;
-  letter-spacing: 0.02em;
-}
-
-.badge-low {
-  background-color: rgba(16, 185, 129, 0.1);
-  color: var(--status-success);
-  border: 1px solid rgba(16, 185, 129, 0.2);
-}
-
-.badge-medium {
-  background-color: rgba(245, 158, 11, 0.1);
-  color: var(--status-warning);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-}
-
-.badge-high {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: var(--status-danger);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.badge-critical {
-  background-color: var(--status-danger);
-  color: white;
-  box-shadow: 0 2px 10px rgba(239, 68, 68, 0.4);
-}
-
-/* Code Blocks */
-.code-snippet {
-  background-color: #1e1e1e !important;
-  /* Always dark syntax for code */
-  color: #d4d4d4;
-  border: 1px solid var(--border-subtle);
-  border-radius: 0.75rem;
-  font-family: var(--font-mono);
-  padding: 1rem;
-}
-
-/* Footer */
-.footer-custom {
-  background-color: var(--bg-panel);
-  border-top: 1px solid var(--border-subtle);
-  padding: 2rem 0;
-  margin-top: auto;
+.btn-aegis-dota:disabled {
+  background: #1a1a1a;
+  border-color: #333;
+  color: #555;
+  box-shadow: none;
 }
 
 /* Animations */
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(5px);
   }
 
   to {
@@ -290,18 +133,116 @@ a:hover {
   }
 }
 
-.fade-in {
-  animation: fadeIn 0.5s ease forwards;
+.blink {
+  animation: blink 2s infinite;
 }
 
-.animate-delay-1 {
-  animation-delay: 0.1s;
+@keyframes blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
 }
 
-.animate-delay-2 {
-  animation-delay: 0.2s;
+/* ===================================
+   UTILITY CLASSES
+   =================================== */
+
+/* Cursor Utilities */
+.cursor-pointer {
+  cursor: pointer;
 }
 
-.animate-delay-3 {
-  animation-delay: 0.3s;
+/* Font Size Utilities */
+.extra-small {
+  font-size: 0.75rem;
+}
+
+.tracking-wider {
+  letter-spacing: 0.1em;
+}
+
+/* Border Hover States */
+.hover-border-primary:hover {
+  border-color: var(--brand-primary) !important;
+}
+
+.hover-border-danger:hover {
+  border-color: var(--brand-secondary) !important;
+}
+
+/* Background Hover States */
+.hover-bg-surface:hover {
+  background-color: var(--bg-surface) !important;
+}
+
+/* Text Hover States */
+.hover-text-primary:hover {
+  color: var(--brand-primary) !important;
+}
+
+.hover-text-danger:hover {
+  color: var(--brand-secondary) !important;
+}
+
+/* Transition Utilities */
+.transition-all {
+  transition: all 0.3s ease;
+}
+
+.transition-colors {
+  transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Icon Button */
+.btn-icon {
+  background: transparent;
+  border: none;
+  padding: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: var(--bg-surface);
+  border-radius: 2px;
+}
+
+/* Group Hover Effects (for parent hover states) */
+.group {
+  position: relative;
+}
+
+/* Status Indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.active {
+  background: var(--brand-primary);
+  box-shadow: 0 0 10px var(--brand-primary);
+  animation: pulse 2s infinite;
+}
+
+.status-dot.inactive {
+  background: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }

@@ -1,7 +1,7 @@
 import os
 import zipfile
 import tempfile
-from typing import Dict, Optional
+from typing import Dict, Optional, Iterable, Tuple
 from flask import current_app
 
 
@@ -123,3 +123,14 @@ def detect_language(file_path: str) -> str:
         return extension_map.get(extension, "unknown")
 
     return "unknown"
+
+
+def chunk_file_lines(content: str, chunk_size: int) -> Iterable[Tuple[str, int, int]]:
+    """Yield (chunk_text, start_line, end_line) tuples for a file."""
+    lines = content.split("\n")
+    for i in range(0, len(lines), chunk_size):
+        chunk_lines = lines[i : i + chunk_size]
+        chunk_content = "\n".join(chunk_lines)
+        line_start = i + 1
+        line_end = min(i + chunk_size, len(lines))
+        yield chunk_content, line_start, line_end

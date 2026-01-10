@@ -19,13 +19,13 @@ def migrate():
     print()
 
     # Initialize database
-    print("[1/4] Initializing database...")
+    print("[1/5] Initializing database...")
     db = init_db()
     print(f"      [OK] Database initialized at: {db.db_path}")
     print()
 
     # Create default providers
-    print("[2/4] Creating default providers...")
+    print("[2/5] Creating default providers...")
     provider_repo = ProviderRepository()
 
     providers_config = [
@@ -80,7 +80,7 @@ def migrate():
     print()
 
     # Create default models
-    print("[3/4] Creating default models...")
+    print("[3/5] Creating default models...")
     model_repo = ModelRepository()
 
     models_config = [
@@ -132,7 +132,7 @@ def migrate():
     print("[4/5] Loading models from YAML config (if available)...")
     try:
         project_root = Path(__file__).parent.parent
-        yaml_path = project_root / "config" / "models_v2.yaml"
+        yaml_path = project_root / "config" / "models.yaml"
 
         if yaml_path.exists():
             print(f"      [INFO] Found config at: {yaml_path}")
@@ -152,7 +152,7 @@ def migrate():
     print()
     print("Next steps:")
     print("  1. Review the database at: {}".format(db.db_path))
-    print("  2. (Optional) Edit config/models_v2.yaml to add/modify models")
+    print("  2. (Optional) Edit config/models.yaml to add/modify models")
     print("  3. (Optional) Set API keys: OPENAI_API_KEY, ANTHROPIC_API_KEY")
     print("  4. Set environment variable: AEGIS_USE_V2=true")
     print("  5. Start Aegis: python app.py")

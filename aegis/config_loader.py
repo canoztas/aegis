@@ -99,7 +99,7 @@ class ConfigLoader:
         """
         if config_path is None:
             project_root = Path(__file__).parent.parent
-            config_path = project_root / "config" / "models_v2.yaml"
+            config_path = project_root / "config" / "models.yaml"
 
         config = cls.load_yaml(config_path)
 
