@@ -58,6 +58,12 @@
               HISTORY
             </a>
           </li>
+          <li class="nav-item">
+            <a class="nav-link px-4 {% if request.endpoint == 'main.settings_page' %}active text-primary{% endif %}"
+              href="{{ url_for('main.settings_page') }}">
+              SETTINGS
+            </a>
+          </li>
         </ul>
       </div>
     </div>

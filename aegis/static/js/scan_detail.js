@@ -42,6 +42,13 @@ async function renderScanResults(data) {
   document.getElementById("loading").style.display = "none";
   document.getElementById("scanContent").style.display = "block";
 
+  try {
+    localStorage.setItem("aegis_last_scan_id", scanId);
+    localStorage.setItem("aegis_last_scan_status", "completed");
+  } catch (e) {
+    // Ignore storage errors
+  }
+
   // Render threat overview dashboard
   renderThreatOverview(data);
 
@@ -50,6 +57,9 @@ async function renderScanResults(data) {
 
   // Render consensus findings
   await renderConsensusFindings(data.consensus_findings || []);
+
+  // Render War Room
+  renderWarRoom(data);
 
   // Render per-model findings
   await renderPerModelFindings(data.per_model_findings || {});
@@ -150,16 +160,143 @@ async function renderConsensusFindings(findings) {
   const container = document.getElementById("consensusFindings");
   if (!container) return;
 
-  async function renderFindingCard(finding) {
-    const severityColor = getSeverityColor(finding.severity);
-    const codeSnippet = await getCodeSnippet(
-      finding.file,
-      finding.start_line,
-      finding.end_line,
-      finding.severity
-    );
+  if (findings.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <i class="bi bi-shield-check"></i>
+        <h3 class="text-success mt-3 mb-2 text-uppercase" style="letter-spacing: 0.1em;">ALL CLEAR</h3>
+        <p class="lead text-muted">No security vulnerabilities detected in consensus analysis.</p>
+      </div>
+    `;
+    return;
+  }
 
-    return `
+  // Sort findings by severity
+  const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+  findings.sort((a, b) => {
+    return (severityOrder[a.severity] || 5) - (severityOrder[b.severity] || 5);
+  });
+
+  let html = "";
+  for (const finding of findings) {
+    html += await renderFindingCard(finding);
+  }
+
+  container.innerHTML = html;
+}
+
+function renderWarRoom(data) {
+  const container = document.getElementById("warRoomContent");
+  if (!container) return; // Guard for older templates
+
+  const perModel = data.per_model_findings || {};
+  const models = Object.keys(perModel);
+
+  if (models.length < 2) {
+    container.innerHTML = `
+            <div class="empty-state">
+                <i class="bi bi-hdd-network"></i>
+                <h3 class="mt-3 mb-2 text-uppercase">NOT_ENOUGH_DATA</h3>
+                <p class="lead text-muted">War Room requires at least 2 models to analyze consensus.</p>
+            </div>`;
+    return;
+  }
+
+  // 1. Calculate Overlap
+  // Finding unique ID = file + line + type (approx)
+  const allFindingsMap = new Map();
+  const modelContribution = {};
+
+  models.forEach(model => {
+    modelContribution[model] = { unique: 0, total: 0 };
+    (perModel[model] || []).forEach(f => {
+      const key = `${f.file}:${f.start_line}:${f.type}`;
+      if (!allFindingsMap.has(key)) {
+        allFindingsMap.set(key, { models: [], finding: f });
+      }
+      allFindingsMap.get(key).models.push(model);
+      modelContribution[model].total++;
+    });
+  });
+
+  let consensusCount = 0;
+  let contentiousCount = 0;
+
+  allFindingsMap.forEach((val, key) => {
+    if (val.models.length === models.length) consensusCount++;
+    if (val.models.length === 1) {
+      modelContribution[val.models[0]].unique++;
+      contentiousCount++;
+    }
+  });
+
+  // 2. Render UI
+  let modelStatsHtml = models.map(m => `
+        <div class="col-md-4">
+            <div class="p-3 bg-surface border border-subtle rounded-1 text-center">
+                <h6 class="text-primary font-monospace">${m}</h6>
+                <div class="d-flex justify-content-center gap-3 mt-2">
+                    <div>
+                        <div class="fs-4 fw-bold text-light">${modelContribution[m].total}</div>
+                        <div class="extra-small text-muted">TOTAL</div>
+                    </div>
+                    <div class="border-start border-secondary mx-1"></div>
+                    <div>
+                        <div class="fs-4 fw-bold text-warning">${modelContribution[m].unique}</div>
+                        <div class="extra-small text-muted">UNIQUE</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+  container.innerHTML = `
+        <div class="row g-4">
+            <!-- Central Intelligence -->
+            <div class="col-12 text-center mb-2">
+                <div class="d-inline-flex align-items-center gap-4 p-3 bg-panel border border-primary border-opacity-25 rounded-pill shadow-sm">
+                    <div class="text-end">
+                        <div class="text-aegis-gold fs-5 font-monospace fw-bold">${consensusCount}</div>
+                        <div class="extra-small text-muted text-uppercase">High Certainty (100% Agree)</div>
+                    </div>
+                    <div class="vr bg-secondary opacity-50" style="height: 30px;"></div>
+                    <div class="text-start">
+                        <div class="text-info fs-5 font-monospace fw-bold">${contentiousCount}</div>
+                        <div class="extra-small text-muted text-uppercase">Contentious (Single Source)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Model Breakdown -->
+            ${modelStatsHtml}
+
+            <!-- Insight Card -->
+            <div class="col-12">
+                 <div class="card bg-surface border-subtle">
+                    <div class="card-body">
+                        <h6 class="text-uppercase text-muted font-monospace mb-3"><i class="bi bi-lightbulb me-2"></i> Tactical Analysis</h6>
+                        <p class="text-secondary mb-0">
+                            ${consensusCount > 0
+      ? "Multiple models confirmed critical vectors. High confidence in consensus findings."
+      : "Models show high divergence. Manual verification recommended for 'Unique' findings."}
+                        </p>
+                    </div>
+                 </div>
+            </div>
+        </div>
+    `;
+}
+
+async function renderFindingCard(finding) {
+  const severityColor = getSeverityColor(finding.severity);
+  const codeSnippet = await getCodeSnippet(
+    finding.file,
+    finding.start_line,
+    finding.end_line,
+    finding.severity
+  );
+
+  return `
     <div class="vuln-card severity-${finding.severity}" style="--severity-color: ${severityColor};">
       <div class="p-3 border-bottom border-subtle">
         <div class="d-flex justify-content-between align-items-start">
@@ -192,15 +329,15 @@ async function renderConsensusFindings(findings) {
       </div>
     </div>
   `;
-  }
+}
 
-  async function getCodeSnippet(filePath, startLine, endLine, severity) {
-    try {
-      const encodedPath = encodeURIComponent(filePath);
-      const response = await fetch(`/api/scan/${scanId}/file/${encodedPath}`);
+async function getCodeSnippet(filePath, startLine, endLine, severity) {
+  try {
+    const encodedPath = encodeURIComponent(filePath);
+    const response = await fetch(`/api/scan/${scanId}/file/${encodedPath}`);
 
-      if (!response.ok) {
-        return `<div class="code-box">
+    if (!response.ok) {
+      return `<div class="code-box">
         <div class="code-box-header">
           <i class="bi bi-code-square"></i>
           <span>Source Code Unavailable</span>
@@ -210,19 +347,19 @@ async function renderConsensusFindings(findings) {
           Unable to load source code for this file
         </div>
       </div>`;
-      }
+    }
 
-      const data = await response.json();
-      const content = data.content;
-      const lines = content.split("\n");
+    const data = await response.json();
+    const content = data.content;
+    const lines = content.split("\n");
 
-      // Context lines
-      const contextBefore = 5;
-      const contextAfter = 5;
-      const displayStart = Math.max(1, startLine - contextBefore);
-      const displayEnd = Math.min(lines.length, endLine + contextAfter);
+    // Context lines
+    const contextBefore = 5;
+    const contextAfter = 5;
+    const displayStart = Math.max(1, startLine - contextBefore);
+    const displayEnd = Math.min(lines.length, endLine + contextAfter);
 
-      let codeHtml = `
+    let codeHtml = `
       <div class="code-box">
         <div class="code-box-header">
           <i class="bi bi-code-square"></i>
@@ -232,28 +369,28 @@ async function renderConsensusFindings(findings) {
         <div class="code-box-content">
     `;
 
-      for (let i = displayStart; i <= displayEnd; i++) {
-        const lineContent = lines[i - 1] || "";
-        const isVulnerable = i >= startLine && i <= endLine;
-        const lineClass = isVulnerable ? "vuln" : "context";
+    for (let i = displayStart; i <= displayEnd; i++) {
+      const lineContent = lines[i - 1] || "";
+      const isVulnerable = i >= startLine && i <= endLine;
+      const lineClass = isVulnerable ? "vuln" : "context";
 
-        codeHtml += `
+      codeHtml += `
         <div class="code-line ${lineClass}">
           <div class="code-line-number">${i}</div>
           <div class="code-line-content">${escapeHtml(lineContent)}</div>
         </div>
       `;
-      }
+    }
 
-      codeHtml += `
+    codeHtml += `
         </div>
       </div>
     `;
 
-      return codeHtml;
-    } catch (error) {
-      console.error("Error fetching code snippet:", error);
-      return `<div class="code-box">
+    return codeHtml;
+  } catch (error) {
+    console.error("Error fetching code snippet:", error);
+    return `<div class="code-box">
       <div class="code-box-header">
         <i class="bi bi-code-square"></i>
         <span>Error Loading Code</span>
@@ -263,38 +400,39 @@ async function renderConsensusFindings(findings) {
         ${escapeHtml(error.message)}
       </div>
     </div>`;
-    }
   }
+}
 
-  async function renderPerModelFindings(perModelFindings) {
-    const container = document.getElementById("perModelFindings");
+async function renderPerModelFindings(perModelFindings) {
+  const container = document.getElementById("perModelFindings");
+  if (!container) return;
 
-    if (Object.keys(perModelFindings).length === 0) {
-      container.innerHTML = `
+  if (Object.keys(perModelFindings).length === 0) {
+    container.innerHTML = `
       <div class="empty-state">
         <i class="bi bi-cpu"></i>
         <h3 class="mt-3 mb-2 text-uppercase" style="letter-spacing: 0.1em;">No Model Data</h3>
         <p class="lead text-muted">No per-model findings available for this scan.</p>
       </div>
     `;
-      return;
-    }
+    return;
+  }
 
-    let html = "";
-    for (const [modelId, findings] of Object.entries(perModelFindings)) {
-      // Sort findings by severity
-      const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-      findings.sort((a, b) => {
-        return (severityOrder[a.severity] || 5) - (severityOrder[b.severity] || 5);
-      });
+  let html = "";
+  for (const [modelId, findings] of Object.entries(perModelFindings)) {
+    // Sort findings by severity
+    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+    findings.sort((a, b) => {
+      return (severityOrder[a.severity] || 5) - (severityOrder[b.severity] || 5);
+    });
 
-      // Count by severity
-      const critical = findings.filter(f => f.severity === "critical").length;
-      const high = findings.filter(f => f.severity === "high").length;
-      const medium = findings.filter(f => f.severity === "medium").length;
-      const low = findings.filter(f => f.severity === "low").length;
+    // Count by severity
+    const critical = findings.filter(f => f.severity === "critical").length;
+    const high = findings.filter(f => f.severity === "high").length;
+    const medium = findings.filter(f => f.severity === "medium").length;
+    const low = findings.filter(f => f.severity === "low").length;
 
-      html += `
+    html += `
       <div class="model-intel-card">
         <div class="model-intel-header">
           <div class="d-flex justify-content-between align-items-center">
@@ -319,72 +457,72 @@ async function renderConsensusFindings(findings) {
         <div class="model-intel-body">
     `;
 
-      for (const finding of findings) {
-        html += await renderFindingCard(finding);
-      }
+    for (const finding of findings) {
+      html += await renderFindingCard(finding);
+    }
 
-      html += `
+    html += `
         </div>
       </div>
     `;
-    }
-
-    container.innerHTML = html;
   }
 
-  function getSeverityColor(severity) {
-    const colors = {
-      critical: "#7c3aed",
-      high: "#ef4444",
-      medium: "#f59e0b",
-      low: "#10b981",
-      info: "#06b6d4",
-    };
-    return colors[severity] || "#6b7280";
-  }
+  container.innerHTML = html;
+}
 
-  function escapeHtml(text) {
-    if (!text) return "";
-    const div = document.createElement("div");
-    div.textContent = text;
-    return div.innerHTML;
-  }
+function getSeverityColor(severity) {
+  const colors = {
+    critical: "#7c3aed",
+    high: "#ef4444",
+    medium: "#f59e0b",
+    low: "#10b981",
+    info: "#06b6d4",
+  };
+  return colors[severity] || "#6b7280";
+}
 
-  function showError(message) {
-    document.getElementById("loading").style.display = "none";
-    document.getElementById("scanContent").innerHTML = `
+function escapeHtml(text) {
+  if (!text) return "";
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showError(message) {
+  document.getElementById("loading").style.display = "none";
+  document.getElementById("scanContent").innerHTML = `
     <div class="empty-state">
       <i class="bi bi-x-circle" style="color: var(--status-danger);"></i>
       <h3 class="mt-3 mb-2 text-uppercase" style="letter-spacing: 0.1em; color: var(--status-danger);">Error</h3>
       <p class="lead text-muted">${escapeHtml(message)}</p>
     </div>
   `;
-    document.getElementById("scanContent").style.display = "block";
-  }
+  document.getElementById("scanContent").style.display = "block";
+}
 
-  // Export functions
-  function exportSARIF() {
-    window.location.href = `/api/scan/${scanId}/sarif`;
-  }
+// Export functions
+function exportSARIF() {
+  window.location.href = `/api/scan/${scanId}/sarif`;
+}
 
-  function exportCSV() {
-    window.location.href = `/api/scan/${scanId}/csv`;
-  }
+function exportCSV() {
+  window.location.href = `/api/scan/${scanId}/csv`;
+}
 
-  async function exportJSON() {
-    try {
-      const response = await fetch(`/api/scan/${scanId}`);
-      const data = await response.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], {
-        type: "application/json",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `aegis_scan_${scanId}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      alert("Error exporting JSON: " + error.message);
-    }
+async function exportJSON() {
+  try {
+    const response = await fetch(`/api/scan/${scanId}`);
+    const data = await response.json();
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `aegis_scan_${scanId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    alert("Error exporting JSON: " + error.message);
   }
+}

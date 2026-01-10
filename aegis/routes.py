@@ -98,6 +98,12 @@ def scan_progress(scan_id: str) -> str:
     return render_template("scan_progress.html", scan_id=scan_id)
 
 
+@main_bp.route("/settings")
+def settings_page() -> str:
+    """Settings and credentials management page."""
+    return render_template("settings.html")
+
+
 # API Routes
 # All model management endpoints moved to aegis/api/routes_models.py
 @main_bp.route("/api/scan", methods=["POST"])

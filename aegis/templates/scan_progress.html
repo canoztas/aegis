@@ -447,8 +447,18 @@
     let steps = {};
     let models = {};
 
+    function updateLocalStatus(status) {
+      try {
+        localStorage.setItem("aegis_last_scan_id", scanId);
+        localStorage.setItem("aegis_last_scan_status", status);
+      } catch (e) {
+        // Ignore storage errors
+      }
+    }
+
     // Initialize SSE connection
     function initSSE() {
+      updateLocalStatus("pending");
       const url = `/api/scan/${scanId}/stream`;
       eventSource = new EventSource(url);
 
@@ -483,6 +493,7 @@
     function handlePipelineStarted(e) {
       const data = JSON.parse(e.data);
       logMessage(`Pipeline started: ${data.pipeline_name} v${data.pipeline_version}`, 'info');
+      updateLocalStatus("running");
 
       // Show cancel button when scan is running
       document.getElementById('cancelScanBtn').style.display = 'inline-block';
@@ -623,6 +634,8 @@
         eventSource.close();
       }
 
+      updateLocalStatus("completed");
+
       // Auto-redirect to results after 2 seconds
       logMessage('Redirecting to results...', 'info');
       setTimeout(() => {
@@ -644,6 +657,7 @@
       if (eventSource) {
         eventSource.close();
       }
+      updateLocalStatus("failed");
     }
 
     function handleCancelled(e) {
@@ -661,6 +675,7 @@
       if (eventSource) {
         eventSource.close();
       }
+      updateLocalStatus("cancelled");
     }
 
     // UI Update Functions
