@@ -5,13 +5,58 @@ document.addEventListener("DOMContentLoaded", function () {
   setupConsensusStrategy();
 });
 
+async function fetchJson(url, options, fallbackUrls) {
+  const method = (options?.method || "GET").toUpperCase();
+  const allowFallback = method === "GET" || method === "HEAD";
+  const urls = [url];
+  if (fallbackUrls) {
+    if (Array.isArray(fallbackUrls)) {
+      urls.push(...fallbackUrls);
+    } else {
+      urls.push(fallbackUrls);
+    }
+  }
+
+  let lastError;
+  for (let i = 0; i < urls.length; i += 1) {
+    const response = await fetch(urls[i], options);
+    const contentType = response.headers.get("content-type") || "";
+    const isJson = contentType.includes("application/json");
+
+    if (response.ok && isJson) {
+      return response.json();
+    }
+
+    const text = await response.text();
+    const snippet = text.slice(0, 200).replace(/\s+/g, " ").trim();
+    lastError = new Error(`HTTP ${response.status}: ${snippet || "Unexpected response"}`);
+
+    const shouldFallback = allowFallback
+      && i < urls.length - 1
+      && (response.status === 404 || response.status === 405 || !isJson);
+
+    if (!shouldFallback) {
+      throw lastError;
+    }
+  }
+
+  throw lastError || new Error("Unexpected response");
+}
+
 async function loadModels() {
   try {
-    const response = await fetch("/api/models");
-    const data = await response.json();
+    const data = await fetchJson(
+      "/api/models/registry?status=registered",
+      null,
+      ["/api/models/registered?status=registered", "/api/models"]
+    );
     const select = document.getElementById("modelsSelect");
-    
-    if (data.models.length === 0) {
+
+    const models = Array.isArray(data.models)
+      ? data.models
+      : (Array.isArray(data) ? data : (Array.isArray(data.data) ? data.data : []));
+
+    if (!models.length) {
       select.innerHTML = '<option value="" disabled>No models available. <a href="/models">Add models</a> first.</option>';
       return;
     }
@@ -20,20 +65,22 @@ async function loadModels() {
     select.innerHTML = '';
     
     // Populate models selectbox
-    data.models.forEach(model => {
+    models.forEach(model => {
       const option = document.createElement("option");
-      option.value = model.id;
-      option.textContent = `${model.display_name} (${model.provider})`;
+      option.value = model.model_id || model.id || model.modelId || model.model_name;
+      const provider = model.provider_id || model.provider || model.providerId || 'unknown';
+      const label = model.display_name || model.displayName || model.model_name || model.name;
+      option.textContent = `${label} (${provider})`;
       select.appendChild(option);
     });
-    
+
     // Also populate judge model select
     const judgeSelect = document.getElementById("judgeModelId");
     judgeSelect.innerHTML = '<option value="">Select judge model...</option>';
-    data.models.forEach(model => {
+    models.forEach(model => {
       const option = document.createElement("option");
-      option.value = model.id;
-      option.textContent = model.display_name;
+      option.value = model.model_id || model.id || model.modelId || model.model_name;
+      option.textContent = model.name || model.display_name || model.displayName || model.model_name;
       judgeSelect.appendChild(option);
     });
   } catch (error) {

@@ -16,12 +16,13 @@ from aegis.pipeline.schema import (
     ConsensusStrategy,
     PipelineExecutionContext,
 )
-from aegis.registry_v2 import ModelRegistryV2
+from aegis.models.registry import ModelRegistryV2
+from aegis.models.schema import ModelRole
 from aegis.prompt_builder import PromptBuilder
 from aegis.consensus.engine import ConsensusEngine
-from aegis.models import ModelRequest, ModelResponse, Finding
+from aegis.data_models import ModelResponse, Finding
 from aegis.events import EventEmitter, EventType
-from aegis.runner import MultiModelRunner
+from aegis.models.executor import ModelExecutionEngine
 
 
 class PipelineExecutor:
@@ -47,11 +48,7 @@ class PipelineExecutor:
         self.prompt_builder = prompt_builder or PromptBuilder()
         self.consensus_engine = consensus_engine or ConsensusEngine(self.prompt_builder)
         self.max_workers = max_workers
-        self.runner = MultiModelRunner(
-            prompt_builder=self.prompt_builder,
-            consensus_engine=self.consensus_engine,
-            max_workers=max_workers,
-        )
+        self.execution_engine = ModelExecutionEngine(self.registry)
 
     def execute(
         self,
@@ -221,46 +218,57 @@ class PipelineExecutor:
         language_hints: Optional[List[str]],
         chunk_size: int,
     ) -> Dict[str, Any]:
-        """Execute a role-based step."""
-        # Get models for this role
-        role_models = self.registry.list_models_by_role(step.role)
+        """Execute a role-based step using registered models for that role."""
+        role_enum = self._normalize_role(step.role)
+        if role_enum is None:
+            raise ValueError(f"Invalid role '{step.role}'")
+
+        role_models = self.registry.get_models_for_role(role_enum, enabled_only=True)
         if not role_models:
             raise ValueError(f"No models found for role '{step.role}'")
 
-        # Get adapters
-        adapters = []
-        for model_data in role_models:
-            adapter = self.registry.get_adapter(model_data["model_id"])
-            if adapter:
-                adapters.append(adapter)
+        per_model_findings: Dict[str, List[Finding]] = {}
+        model_responses: List[ModelResponse] = []
 
-        if not adapters:
-            raise ValueError(f"No adapters available for role '{step.role}'")
+        for model in role_models:
+            per_model_findings[model.model_id] = []
+            for file_path, content in source_files.items():
+                for chunk_content, line_start, line_end in self._chunk_file(content, chunk_size):
+                    findings = self.execution_engine.run_model_to_findings(
+                        model=model,
+                        code=chunk_content,
+                        file_path=file_path,
+                        role=role_enum,
+                        line_start=line_start,
+                        line_end=line_end,
+                    )
+                    per_model_findings[model.model_id].extend(findings)
+                    for finding in findings:
+                        emitter.finding_emitted(finding.to_dict(), step.id)
 
-        # Run models using MultiModelRunner
-        scan_result = self.runner.run_scan(
-            source_files=source_files,
-            models=adapters,
-            cwe_ids=None,  # Auto-detect by language
-            consensus_strategy="union",  # Collect all findings at this step
-            language_hints=language_hints,
-            chunk_size=chunk_size,
+            model_responses.append(
+                ModelResponse(
+                    model_id=model.model_id,
+                    findings=per_model_findings[model.model_id],
+                    usage={},
+                )
+            )
+
+        consensus_findings = self.consensus_engine.merge(
+            model_responses,
+            strategy="union",
         )
 
-        # Emit findings
-        for finding in scan_result.consensus_findings:
-            emitter.finding_emitted(finding.__dict__, step.id)
-
         return {
-            "findings": [f.__dict__ for f in scan_result.consensus_findings],
+            "findings": [f.to_dict() for f in consensus_findings],
             "per_model_findings": {
-                model_id: [f.__dict__ for f in findings]
-                for model_id, findings in scan_result.per_model_findings.items()
+                model_id: [f.to_dict() for f in findings]
+                for model_id, findings in per_model_findings.items()
             },
             "metadata": {
-                "role": step.role,
-                "models_count": len(adapters),
-                "models": [a.id for a in adapters],
+                "role": role_enum.value,
+                "models_count": len(role_models),
+                "models": [m.model_id for m in role_models],
             },
         }
 
@@ -273,42 +281,87 @@ class PipelineExecutor:
         chunk_size: int,
     ) -> Dict[str, Any]:
         """Execute a model-specific step."""
-        # Get specific models
-        adapters = []
-        for model_id in step.models:
-            adapter = self.registry.get_adapter(model_id)
-            if adapter:
-                adapters.append(adapter)
-            else:
-                emitter.warning(f"Model '{model_id}' not found", {"model_id": model_id})
+        per_model_findings: Dict[str, List[Finding]] = {}
+        model_responses: List[ModelResponse] = []
 
-        if not adapters:
+        for model_id in step.models or []:
+            model = self.registry.get_model(model_id)
+            if not model:
+                emitter.warning(f"Model '{model_id}' not found", {"model_id": model_id})
+                continue
+
+            per_model_findings[model_id] = []
+            role_hint = model.roles[0] if model.roles else None
+
+            for file_path, content in source_files.items():
+                for chunk_content, line_start, line_end in self._chunk_file(content, chunk_size):
+                    findings = self.execution_engine.run_model_to_findings(
+                        model=model,
+                        code=chunk_content,
+                        file_path=file_path,
+                        role=role_hint,
+                        line_start=line_start,
+                        line_end=line_end,
+                    )
+                    per_model_findings[model_id].extend(findings)
+                    for finding in findings:
+                        emitter.finding_emitted(finding.to_dict(), step.id)
+
+            model_responses.append(
+                ModelResponse(
+                    model_id=model_id,
+                    findings=per_model_findings[model_id],
+                    usage={},
+                )
+            )
+
+        if not model_responses:
             raise ValueError(f"No adapters available for models {step.models}")
 
-        # Run models
-        scan_result = self.runner.run_scan(
-            source_files=source_files,
-            models=adapters,
-            cwe_ids=None,
-            consensus_strategy="union",
-            language_hints=language_hints,
-            chunk_size=chunk_size,
-        )
-
-        # Emit findings
-        for finding in scan_result.consensus_findings:
-            emitter.finding_emitted(finding.__dict__, step.id)
+        consensus_findings = self.consensus_engine.merge(model_responses, strategy="union")
 
         return {
-            "findings": [f.__dict__ for f in scan_result.consensus_findings],
+            "findings": [f.to_dict() for f in consensus_findings],
             "per_model_findings": {
-                model_id: [f.__dict__ for f in findings]
-                for model_id, findings in scan_result.per_model_findings.items()
+                model_id: [f.to_dict() for f in findings]
+                for model_id, findings in per_model_findings.items()
             },
             "metadata": {
-                "models": [a.id for a in adapters],
+                "models": [model_id for model_id in per_model_findings.keys()],
             },
         }
+
+    def _normalize_role(self, role: Optional[str]) -> Optional[ModelRole]:
+        """Normalize legacy role strings to ModelRole."""
+        if not role:
+            return None
+        mapping = {
+            "scan": ModelRole.DEEP_SCAN,
+            "deep_scan": ModelRole.DEEP_SCAN,
+            "triage": ModelRole.TRIAGE,
+            "judge": ModelRole.JUDGE,
+            "explain": ModelRole.EXPLAIN,
+        }
+        try:
+            return ModelRole(role)
+        except Exception:
+            return mapping.get(role.lower())
+
+    def _chunk_file(
+        self, content: str, chunk_size: int
+    ) -> List[tuple[str, int, int]]:
+        """Split file content into chunks with start/end lines."""
+        lines = content.split("\n")
+        chunks = []
+
+        for i in range(0, len(lines), chunk_size):
+            chunk_lines = lines[i : i + chunk_size]
+            chunk_content = "\n".join(chunk_lines)
+            line_start = i + 1
+            line_end = min(i + chunk_size, len(lines))
+            chunks.append((chunk_content, line_start, line_end))
+
+        return chunks
 
     def _execute_consensus_step(
         self,

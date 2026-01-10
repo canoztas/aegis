@@ -1,10 +1,11 @@
-{% extends "base.html" %} {% block title %}Models - aegis{% endblock %} {% block
-content %}
+{% extends "base.html" %}
+{% block title %}Models - aegis{% endblock %}
+{% block content %}
 <div class="container py-5">
   <div class="row mb-4">
     <div class="col-12">
-      <h2><i class="bi bi-cpu"></i> Model Registry</h2>
-      <p class="text-muted">Manage your security analysis models</p>
+      <h2><i class="bi bi-cpu"></i> Model Management</h2>
+      <p class="text-muted">Register and manage your security analysis models</p>
     </div>
   </div>
 
@@ -12,63 +13,95 @@ content %}
     <li class="nav-item" role="presentation">
       <button
         class="nav-link active"
-        id="ollama-tab"
+        id="registered-tab"
         data-bs-toggle="tab"
-        data-bs-target="#ollama"
+        data-bs-target="#registered"
         type="button"
         role="tab"
       >
-        Ollama
+        <i class="bi bi-list-check"></i> My Models
       </button>
     </li>
     <li class="nav-item" role="presentation">
       <button
         class="nav-link"
-        id="cloud-tab"
+        id="add-ollama-tab"
         data-bs-toggle="tab"
-        data-bs-target="#cloud"
+        data-bs-target="#add-ollama"
         type="button"
         role="tab"
       >
-        Cloud LLMs
+        <i class="bi bi-compass"></i> Discover Ollama
       </button>
     </li>
     <li class="nav-item" role="presentation">
       <button
         class="nav-link"
-        id="hf-tab"
+        id="add-cloud-tab"
         data-bs-toggle="tab"
-        data-bs-target="#hf"
+        data-bs-target="#add-cloud"
         type="button"
         role="tab"
       >
-        HuggingFace
+        <i class="bi bi-cloud"></i> Cloud LLM
       </button>
     </li>
     <li class="nav-item" role="presentation">
       <button
         class="nav-link"
-        id="classic-tab"
+        id="add-hf-tab"
         data-bs-toggle="tab"
-        data-bs-target="#classic"
+        data-bs-target="#add-hf"
         type="button"
         role="tab"
       >
-        Classic ML
+        <i class="bi bi-plus-circle"></i> Add HuggingFace
       </button>
     </li>
   </ul>
 
   <div class="tab-content" id="modelTabsContent">
-    <!-- Ollama Tab -->
-    <div class="tab-pane fade show active" id="ollama" role="tabpanel">
+    <!-- My Models Tab (Registered Models) -->
+    <div class="tab-pane fade show active" id="registered" role="tabpanel">
       <div class="card">
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-center mb-3">
-            <h5>Ollama Models</h5>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pullOllamaModal">
-              <i class="bi bi-download"></i> Pull Model
+            <div>
+              <h5>Registered Models</h5>
+              <p class="text-muted small mb-0">Configured models used during scans</p>
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="loadRegisteredModels()">
+              <i class="bi bi-arrow-clockwise"></i> Refresh
             </button>
+          </div>
+          <div id="registeredModelsList">
+            <div class="text-center text-muted py-4">
+              <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Ollama Tab -->
+    <div class="tab-pane fade" id="add-ollama" role="tabpanel">
+      <div class="card">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h5>Discovered Ollama Models</h5>
+              <p class="text-muted small mb-0">Discovery shows all locally installed Ollama models</p>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary btn-sm" onclick="loadOllamaModels(true)">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+              </button>
+              <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#pullOllamaModal">
+                <i class="bi bi-download"></i> Pull New Model
+              </button>
+            </div>
           </div>
           <div id="ollamaModelsList">
             <div class="text-center text-muted py-4">
@@ -81,41 +114,51 @@ content %}
       </div>
     </div>
 
-    <!-- Cloud LLMs Tab -->
-    <div class="tab-pane fade" id="cloud" role="tabpanel">
+    <!-- Add Cloud LLM Tab -->
+    <div class="tab-pane fade" id="add-cloud" role="tabpanel">
       <div class="card">
         <div class="card-body">
-          <h5>Cloud LLM Providers</h5>
-          <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addCloudModal">
-            <i class="bi bi-plus-circle"></i> Add Cloud LLM
+          <h5>Add Cloud LLM Provider</h5>
+          <p class="text-muted">OpenAI-compatible providers are supported, UI wiring coming next.</p>
+          <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#addCloudModal">
+            <i class="bi bi-plus-circle"></i> Add Cloud Model
           </button>
-          <div id="cloudModelsList"></div>
+          <div id="cloudInstructions" class="mt-4">
+            <div class="alert alert-info">
+              <h6><i class="bi bi-info-circle"></i> Supported Providers:</h6>
+              <ul class="mb-0">
+                <li><strong>OpenAI</strong> - GPT-4, GPT-3.5-turbo, etc.</li>
+                <li><strong>Anthropic</strong> - Claude 3 Opus, Sonnet, Haiku</li>
+                <li><strong>Azure OpenAI</strong> - Azure-hosted OpenAI models</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- HuggingFace Tab -->
-    <div class="tab-pane fade" id="hf" role="tabpanel">
+    <!-- Add HuggingFace Tab -->
+    <div class="tab-pane fade" id="add-hf" role="tabpanel">
       <div class="card">
         <div class="card-body">
-          <h5>HuggingFace Models</h5>
-          <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addHFModal">
-            <i class="bi bi-plus-circle"></i> Add HF Model
-          </button>
-          <div id="hfModelsList"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Classic ML Tab -->
-    <div class="tab-pane fade" id="classic" role="tabpanel">
-      <div class="card">
-        <div class="card-body">
-          <h5>Classic ML Models</h5>
-          <button class="btn btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#addClassicModal">
-            <i class="bi bi-plus-circle"></i> Add Classic Model
-          </button>
-          <div id="classicModelsList"></div>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <h5><i class="bi bi-cpu"></i> HuggingFace Models</h5>
+              <p class="text-muted small mb-0">Open-source models with custom output parsing</p>
+            </div>
+            <div>
+              <button class="btn btn-outline-primary me-2" onclick="seedBuiltinModels()">
+                <i class="bi bi-download"></i> Register Built-ins
+              </button>
+            </div>
+          </div>
+          <div id="hfModelsList">
+            <div class="text-center text-muted py-4">
+              <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -135,6 +178,7 @@ content %}
           <div class="mb-3">
             <label for="ollamaModelName" class="form-label">Model Name</label>
             <input type="text" class="form-control" id="ollamaModelName" placeholder="e.g., qwen2.5-coder:7b" required>
+            <small class="text-muted">Model will be automatically registered after pulling</small>
           </div>
         </form>
         <div id="pullProgress" style="display: none;">
@@ -147,7 +191,59 @@ content %}
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="pullOllamaModel()">Pull</button>
+        <button type="button" class="btn btn-primary" onclick="pullOllamaModel()">Pull & Register</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Register Ollama Model Modal -->
+<div class="modal fade" id="registerOllamaModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Register Ollama Model</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="registerOllamaForm">
+          <div class="mb-3">
+            <label class="form-label">Model Name</label>
+            <input type="text" class="form-control" id="registerOllamaName" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Roles</label>
+            <div class="d-flex flex-wrap gap-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ollamaRoleDeep" checked>
+                <label class="form-check-label" for="ollamaRoleDeep">deep_scan</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ollamaRoleJudge">
+                <label class="form-check-label" for="ollamaRoleJudge">judge</label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="ollamaRoleTriage">
+                <label class="form-check-label" for="ollamaRoleTriage">triage</label>
+              </div>
+            </div>
+            <small class="text-muted">Choose at least one role</small>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Temperature</label>
+              <input type="number" step="0.1" min="0" max="2" class="form-control" id="ollamaTemp" value="0.1">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label">Max Tokens</label>
+              <input type="number" min="1" class="form-control" id="ollamaMaxTokens" value="2048">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="registerOllamaFromModal()">Register</button>
       </div>
     </div>
   </div>
@@ -193,72 +289,74 @@ content %}
   </div>
 </div>
 
-<!-- Add HF Model Modal -->
-<div class="modal fade" id="addHFModal" tabindex="-1">
-  <div class="modal-dialog">
+<!-- Test Model Modal -->
+<div class="modal fade" id="testModelModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Add HuggingFace Model</h5>
+        <h5 class="modal-title">Test Model</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <form id="addHFForm">
+        <form id="testModelForm">
           <div class="mb-3">
-            <label for="hfModelId" class="form-label">Model ID</label>
-            <input type="text" class="form-control" id="hfModelId" placeholder="e.g., bigcode/starcoder2" required>
+            <label class="form-label">Model ID</label>
+            <input type="text" class="form-control" id="testModelId" readonly>
           </div>
           <div class="mb-3">
-            <label for="hfTask" class="form-label">Task</label>
-            <select class="form-select" id="hfTask">
-              <option value="text-generation">Text Generation</option>
-              <option value="sequence-classification">Sequence Classification</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label for="hfCacheDir" class="form-label">Cache Directory (optional)</label>
-            <input type="text" class="form-control" id="hfCacheDir">
+            <label class="form-label">Prompt</label>
+            <textarea class="form-control font-monospace" id="testModelPrompt" rows="6">def add(a, b):\n    return a + b</textarea>
           </div>
         </form>
+        <div id="testModelResult" class="alert alert-secondary d-none">
+          <pre class="mb-0" id="testModelResultText"></pre>
+        </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="addHFModel()">Add</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" onclick="runModelTest()">Run Test</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Add Classic Model Modal -->
-<div class="modal fade" id="addClassicModal" tabindex="-1">
+<!-- HF Preset Config Modal -->
+<div class="modal fade" id="hfPresetModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">Add Classic ML Model</h5>
+        <h5 class="modal-title">Configure HuggingFace Preset</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <form id="addClassicForm">
-          <div class="mb-3">
-            <label for="classicModelPath" class="form-label">Model Path</label>
-            <input type="text" class="form-control" id="classicModelPath" placeholder="/path/to/model.pkl" required>
-          </div>
-          <div class="mb-3">
-            <label for="classicModelType" class="form-label">Model Type</label>
-            <select class="form-select" id="classicModelType">
-              <option value="sklearn">scikit-learn</option>
-              <option value="onnx">ONNX</option>
-            </select>
-          </div>
-        </form>
+        <input type="hidden" id="hfPresetId">
+        <div class="mb-3">
+          <label class="form-label">Device</label>
+          <select class="form-select" id="hfPresetDevice">
+            <option value="auto" selected>Auto (prefer GPU if available)</option>
+            <option value="cpu">CPU</option>
+            <option value="cuda">CUDA</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Quantization</label>
+          <select class="form-select" id="hfPresetQuant">
+            <option value="none" selected>None (full precision)</option>
+            <option value="4bit">4-bit (requires bitsandbytes + GPU)</option>
+            <option value="8bit">8-bit (requires bitsandbytes + GPU)</option>
+          </select>
+          <small class="text-muted">4/8-bit reduces memory; requires bitsandbytes and typically a GPU.</small>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn btn-primary" onclick="addClassicModel()">Add</button>
+        <button type="button" class="btn btn-primary" onclick="registerHFPresetFromModal()">Register</button>
       </div>
     </div>
   </div>
 </div>
-{% endblock %} {% block scripts %}
+
+{% endblock %}
+{% block scripts %}
 <script src="{{ url_for('static', filename='js/models.js') }}"></script>
 {% endblock %}
-

@@ -11,7 +11,8 @@ from typing import Dict, List, Optional
 from pydantic import ValidationError
 
 from aegis.pipeline.schema import PipelineConfig, PipelineStep
-from aegis.registry_v2 import ModelRegistryV2
+from aegis.models.registry import ModelRegistryV2
+from aegis.models.schema import ModelRole
 
 
 class PipelineLoader:
@@ -163,15 +164,16 @@ class PipelineLoader:
         for step in pipeline.steps:
             # Validate role steps
             if step.kind.value == "role" and step.role:
-                role_models = self.registry.list_models_by_role(step.role)
+                role_enum = self._normalize_role(step.role)
+                role_models = self.registry.get_models_for_role(role_enum) if role_enum else []
                 if not role_models:
                     raise ValueError(f"Step '{step.id}': No models found for role '{step.role}'")
 
             # Validate model steps
             if step.kind.value == "model" and step.models:
                 for model_id in step.models:
-                    adapter = self.registry.get_adapter(model_id)
-                    if not adapter:
+                    model = self.registry.get_model(model_id)
+                    if not model:
                         raise ValueError(f"Step '{step.id}': Model '{model_id}' not found in registry")
 
     def validate_pipeline(self, pipeline: PipelineConfig) -> List[str]:
@@ -208,6 +210,20 @@ class PipelineLoader:
                         )
 
         return warnings
+
+    def _normalize_role(self, role: str) -> Optional[ModelRole]:
+        """Normalize legacy role strings to ModelRole."""
+        mapping = {
+            "scan": ModelRole.DEEP_SCAN,
+            "deep_scan": ModelRole.DEEP_SCAN,
+            "triage": ModelRole.TRIAGE,
+            "judge": ModelRole.JUDGE,
+            "explain": ModelRole.EXPLAIN,
+        }
+        try:
+            return ModelRole(role)
+        except Exception:
+            return mapping.get(role.lower())
 
 
 class PipelineRegistry:

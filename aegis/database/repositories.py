@@ -5,7 +5,7 @@ import json
 import logging
 
 from aegis.database import get_db
-from aegis.models import Finding
+from aegis.data_models import Finding
 
 logger = logging.getLogger(__name__)
 

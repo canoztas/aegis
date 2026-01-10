@@ -10,9 +10,6 @@ from flask import (
     request,
     jsonify,
     current_app,
-    flash,
-    redirect,
-    url_for,
     Response,
     stream_with_context,
 )
@@ -20,15 +17,16 @@ from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 
 from aegis.utils import allowed_file, extract_source_files
-from aegis.registry import ModelRegistry
-from aegis.runner import MultiModelRunner
 from aegis.exports import export_sarif, export_csv
-from aegis.models import ScanResult
+from aegis.data_models import ScanResult, ModelResponse, Finding
+from aegis.models.registry import ModelRegistryV2 as NewModelRegistry
+from aegis.models.executor import ModelExecutionEngine
+from aegis.models.schema import ModelStatus
+from aegis.consensus.engine import ConsensusEngine
 
 main_bp = Blueprint("main", __name__)
 
-# Global registry and scan storage
-_registry = ModelRegistry()
+# Global scan storage
 _scan_results: Dict[str, ScanResult] = {}
 _scan_status: Dict[str, str] = {}  # Track scan status: pending, running, completed, failed, cancelled
 _scan_cancel_events: Dict[str, threading.Event] = {}  # Cancel events for running scans
@@ -46,6 +44,17 @@ def get_v2_repositories():
         _scan_repo = ScanRepository()
         _finding_repo = FindingRepository()
     return _scan_repo, _finding_repo
+
+
+@main_bp.after_request
+def add_cache_headers(response):
+    """Add cache control headers to prevent stale JavaScript in development."""
+    if current_app.debug:
+        # In debug mode, disable caching for all responses
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
 
 
 @main_bp.route("/")
@@ -79,161 +88,103 @@ def scan_progress(scan_id: str) -> str:
 
 
 # API Routes
+# All model management endpoints moved to aegis/api/routes_models.py
 
-@main_bp.route("/api/models", methods=["GET"])
-def list_models() -> Any:
-    """List all registered models."""
-    return jsonify({"models": _registry.list_all()})
-
-
-@main_bp.route("/api/models/<provider>", methods=["GET"])
-def list_models_by_provider(provider: str) -> Any:
-    """List models by provider."""
-    return jsonify({"models": _registry.list_by_provider(provider)})
-
-
-@main_bp.route("/api/models/ollama", methods=["GET"])
-def list_ollama_models() -> Any:
-    """List installed Ollama models."""
-    base_url = current_app.config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    models = _registry.discover_ollama_models(base_url)
-    return jsonify({"models": models})
-
-
-@main_bp.route("/api/models/ollama/pull", methods=["POST"])
-def pull_ollama_model() -> Any:
-    """Pull an Ollama model."""
-    data = request.get_json()
-    model_name = data.get("name")
-    
-    if not model_name:
-        return jsonify({"error": "Model name required"}), 400
-    
-    base_url = current_app.config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    result = _registry.pull_ollama_model(model_name, base_url)
-    
-    if result.get("success"):
-        return jsonify(result)
-    else:
-        return jsonify({"error": result.get("error")}), 500
-
-
-@main_bp.route("/api/models/ollama/register", methods=["POST"])
-def register_ollama_model() -> Any:
-    """Register an Ollama model as an adapter."""
-    data = request.get_json()
-    model_name = data.get("name")
-    
-    if not model_name:
-        return jsonify({"error": "Model name required"}), 400
-    
-    base_url = current_app.config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-    adapter = _registry.create_ollama_adapter(model_name, base_url)
-    
-    return jsonify({"adapter": adapter.to_dict()})
-
-
-@main_bp.route("/api/models/llm/register", methods=["POST"])
-def register_llm_model() -> Any:
-    """Register a cloud LLM model."""
-    data = request.get_json()
-    provider = data.get("provider")
-    model_name = data.get("model_name")
-    api_key = data.get("api_key")
-    api_base = data.get("api_base")
-    
-    if not all([provider, model_name, api_key]):
-        return jsonify({"error": "provider, model_name, and api_key required"}), 400
-    
-    adapter = _registry.create_llm_adapter(provider, model_name, api_key, api_base)
-    return jsonify({"adapter": adapter.to_dict()})
-
-
-@main_bp.route("/api/models/hf/register", methods=["POST"])
-def register_hf_model() -> Any:
-    """Register a HuggingFace model."""
-    data = request.get_json()
-    model_id = data.get("model_id")
-    task = data.get("task", "text-generation")
-    cache_dir = data.get("cache_dir")
-    
-    if not model_id:
-        return jsonify({"error": "model_id required"}), 400
-    
-    adapter = _registry.create_hf_adapter(model_id, task, cache_dir)
-    return jsonify({"adapter": adapter.to_dict()})
-
-
-@main_bp.route("/api/models/classic/register", methods=["POST"])
-def register_classic_model() -> Any:
-    """Register a classic ML model."""
-    data = request.get_json()
-    model_path = data.get("model_path")
-    model_type = data.get("model_type", "sklearn")
-    
-    if not model_path:
-        return jsonify({"error": "model_path required"}), 400
-    
-    adapter = _registry.create_classic_adapter(model_path, model_type)
-    return jsonify({"adapter": adapter.to_dict()})
-
-
-@main_bp.route("/api/models/<adapter_id>", methods=["DELETE"])
-def remove_model(adapter_id: str) -> Any:
-    """Remove a model adapter."""
-    success = _registry.remove(adapter_id)
-    if success:
-        return jsonify({"success": True})
-    else:
-        return jsonify({"error": "Model not found"}), 404
-
-
-def _run_scan_background(scan_id: str, source_files: Dict[str, str], models: List[Any],
-                         consensus_strategy: str, judge_model: Any, app):
-    """Run scan in background thread."""
+def _run_scan_background(scan_id: str, source_files: Dict[str, str], model_ids: List[str],
+                         consensus_strategy: str, app):
+    """Run scan in background thread using the refactored model engine."""
     from aegis.events import EventEmitter
 
+    def _chunk_file(content: str, chunk_size: int = 800) -> List[tuple[str, int, int]]:
+        lines = content.split("\n")
+        chunks = []
+        for i in range(0, len(lines), chunk_size):
+            chunk_lines = lines[i:i + chunk_size]
+            chunk_content = "\n".join(chunk_lines)
+            line_start = i + 1
+            line_end = min(i + chunk_size, len(lines))
+            chunks.append((chunk_content, line_start, line_end))
+        return chunks
+
     with app.app_context():
+        emitter = EventEmitter(scan_id)
         try:
             _scan_status[scan_id] = "running"
-            emitter = EventEmitter(scan_id)
-
-            # Emit pipeline started
             emitter.pipeline_started("multi_model_scan", "1.0")
 
-            # Check for cancellation before starting
             if scan_id in _scan_cancel_events and _scan_cancel_events[scan_id].is_set():
                 _scan_status[scan_id] = "cancelled"
                 emitter.emit("cancelled", {"message": "Scan cancelled before execution"})
                 return
 
-            # Run scan with EventEmitter for progress tracking
-            runner = MultiModelRunner(emitter=emitter)
-            scan_result = runner.run_scan(
-                source_files=source_files,
-                models=models,
-                cwe_ids=None,  # Auto-select by language
-                consensus_strategy=consensus_strategy,
-                judge_model=judge_model,
-                emitter=emitter,
+            registry = NewModelRegistry()
+            engine = ModelExecutionEngine(registry)
+            consensus = ConsensusEngine()
+
+            per_model_findings: Dict[str, List[Finding]] = {}
+            model_responses: List[ModelResponse] = []
+
+            for model_id in model_ids:
+                model = registry.get_model(model_id)
+                if not model:
+                    emitter.warning(f"Model '{model_id}' not found", {"model_id": model_id})
+                    continue
+
+                per_model_findings[model_id] = []
+                for file_path, content in source_files.items():
+                    for chunk_content, line_start, line_end in _chunk_file(content):
+                        findings = engine.run_model_to_findings(
+                            model=model,
+                            code=chunk_content,
+                            file_path=file_path,
+                            role=model.roles[0] if model.roles else None,
+                            line_start=line_start,
+                            line_end=line_end,
+                        )
+                        per_model_findings[model_id].extend(findings)
+                        for finding in findings:
+                            emitter.finding_emitted(finding.to_dict(), model_id)
+
+                model_responses.append(
+                    ModelResponse(
+                        model_id=model_id,
+                        findings=per_model_findings[model_id],
+                        usage={},
+                    )
+                )
+
+            if not model_responses:
+                raise ValueError("No runnable models found for scan")
+
+            consensus_findings = consensus.merge(
+                model_responses,
+                strategy=consensus_strategy or "union",
             )
 
-            # Check for cancellation after scan
+            scan_result = ScanResult(
+                scan_id=scan_id,
+                consensus_findings=consensus_findings,
+                per_model_findings=per_model_findings,
+                scan_metadata={
+                    "models": model_ids,
+                    "strategy": consensus_strategy,
+                    "files_scanned": len(source_files),
+                    "total_findings": len(consensus_findings),
+                },
+                source_files=source_files,
+            )
+
             if scan_id in _scan_cancel_events and _scan_cancel_events[scan_id].is_set():
                 _scan_status[scan_id] = "cancelled"
                 emitter.emit("cancelled", {"message": "Scan cancelled"})
                 return
 
-            # Store result with source files for code snippet display
-            scan_result.source_files = source_files
             _scan_results[scan_id] = scan_result
             _scan_status[scan_id] = "completed"
 
-            # V2: Persist to database
             if _use_v2:
                 scan_repo, finding_repo = get_v2_repositories()
                 try:
-                    # Update scan status
                     scan_repo.update_status(scan_id, 'completed')
                     scan_repo.update_progress(
                         scan_id,
@@ -241,14 +192,11 @@ def _run_scan_background(scan_id: str, source_files: Dict[str, str], models: Lis
                         processed_files=len(source_files)
                     )
 
-                    # Save consensus findings
                     finding_repo.create_batch(
                         scan_result.consensus_findings,
                         scan_id,
                         is_consensus=True
                     )
-
-                    # Save per-model findings
                     for model_id, findings in scan_result.per_model_findings.items():
                         finding_repo.create_batch(
                             findings,
@@ -259,15 +207,12 @@ def _run_scan_background(scan_id: str, source_files: Dict[str, str], models: Lis
                 except Exception as e:
                     print(f"Warning: Failed to persist scan to database: {e}")
 
-            # Emit completion event
             emitter.pipeline_completed(len(scan_result.consensus_findings), 0)
 
         except Exception as e:
             _scan_status[scan_id] = "failed"
-            emitter = EventEmitter(scan_id)
             emitter.error(str(e))
         finally:
-            # Clean up cancel event
             if scan_id in _scan_cancel_events:
                 del _scan_cancel_events[scan_id]
 
@@ -299,22 +244,17 @@ def create_scan() -> Any:
         # Extract source files
         source_files = extract_source_files(filepath)
 
-        # Get selected models
-        models = []
+        # Validate selected models against new registry
+        registry = NewModelRegistry()
+        valid_model_ids = []
         for model_id in model_ids:
-            adapter = _registry.get(model_id)
-            if adapter:
-                models.append(adapter)
+            if registry.get_model(model_id):
+                valid_model_ids.append(model_id)
 
-        if not models:
+        if not valid_model_ids:
             if filepath and os.path.exists(filepath):
                 os.remove(filepath)
             return jsonify({"error": "No valid models selected"}), 400
-
-        # Get judge model if specified
-        judge_model = None
-        if judge_model_id:
-            judge_model = _registry.get(judge_model_id)
 
         # Generate scan ID
         scan_id = str(uuid.uuid4())
@@ -329,9 +269,16 @@ def create_scan() -> Any:
             try:
                 # Save source files to database
                 from aegis.utils import detect_language
+                pipeline_config = {
+                    "consensus_strategy": consensus_strategy,
+                    "models": valid_model_ids,
+                }
+                if judge_model_id:
+                    pipeline_config["judge_model_id"] = judge_model_id
+
                 scan_repo.create(
                     scan_id=scan_id,
-                    pipeline_config={"consensus_strategy": consensus_strategy},
+                    pipeline_config=pipeline_config,
                     consensus_strategy=consensus_strategy,
                     upload_filename=filename
                 )
@@ -351,7 +298,7 @@ def create_scan() -> Any:
         # Start background scan
         thread = threading.Thread(
             target=_run_scan_background,
-            args=(scan_id, source_files, models, consensus_strategy, judge_model, current_app._get_current_object())
+            args=(scan_id, source_files, valid_model_ids, consensus_strategy, current_app._get_current_object())
         )
         thread.daemon = True
         thread.start()
@@ -495,28 +442,21 @@ def retry_scan(scan_id: str) -> Any:
                 processed_files=0
             )
 
-            # Get models (from registry - assumes same models still available)
-            models = []
-            for model_id in pipeline_config.get("models", []):
-                adapter = _registry.get(model_id)
-                if adapter:
-                    models.append(adapter)
+            # Resolve models by ID from registry (fallback to all registered)
+            registry = NewModelRegistry()
+            model_ids = pipeline_config.get("models", [])
+            if model_ids:
+                model_ids = [model_id for model_id in model_ids if registry.get_model(model_id)]
+            else:
+                model_ids = [model.model_id for model in registry.list_models(status=ModelStatus.REGISTERED)]
 
-            if not models:
-                # Fallback: use all available models
-                all_models = _registry.list_all()
-                for model_info in all_models:
-                    adapter = _registry.get(model_info['id'])
-                    if adapter:
-                        models.append(adapter)
-
-            if not models:
+            if not model_ids:
                 return jsonify({"error": "No models available for retry"}), 400
 
             # Start background scan
             thread = threading.Thread(
                 target=_run_scan_background,
-                args=(new_scan_id, source_files, models, consensus_strategy, None, current_app._get_current_object())
+                args=(new_scan_id, source_files, model_ids, consensus_strategy, current_app._get_current_object())
             )
             thread.daemon = True
             thread.start()
@@ -647,7 +587,7 @@ def get_scan(scan_id: str) -> Any:
                 consensus_findings = finding_repo.get_consensus_findings(scan_id)
 
                 # Get per-model findings
-                from aegis.models import Finding
+                from aegis.data_models import Finding
                 all_findings = finding_repo.get_all_findings(scan_id, include_consensus=False)
                 per_model_findings = {}
                 for finding_dict in all_findings:
@@ -926,7 +866,7 @@ def create_pipeline_scan() -> Any:
         final_findings = executor._get_final_findings(context)
 
         # Convert findings dicts to Finding objects for compatibility
-        from aegis.models import Finding
+        from aegis.data_models import Finding
         consensus_findings = [Finding(**f) for f in final_findings]
 
         # Create ScanResult for compatibility
@@ -1053,121 +993,6 @@ def list_scans() -> Any:
     scans.sort(key=lambda x: x.get('created_at') or '', reverse=True)
 
     return jsonify({"scans": scans[:limit]})
-
-
-# Legacy routes for backward compatibility
-
-@main_bp.route("/upload", methods=["POST"])
-def upload_file() -> Any:
-    """Legacy upload route."""
-    if "file" not in request.files:
-        flash("No file selected")
-        return redirect(request.url)
-    
-    file: FileStorage = request.files["file"]
-    
-    if file.filename == "":
-        flash("No file selected")
-        return redirect(request.url)
-    
-    if file and allowed_file(file.filename):
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-        file.save(filepath)
-        
-        try:
-            # Use new scan API
-            source_files = extract_source_files(filepath)
-            
-            # Get default Ollama model
-            base_url = current_app.config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-            model_name = current_app.config.get("OLLAMA_MODEL", "gpt-oss:120b-cloud")
-            adapter = _registry.create_ollama_adapter(model_name, base_url)
-            
-            runner = MultiModelRunner()
-            scan_result = runner.run_scan(
-                source_files=source_files,
-                models=[adapter],
-            )
-            
-            _scan_results[scan_result.scan_id] = scan_result
-            
-            os.remove(filepath)
-            
-            # Convert to legacy format for template
-            legacy_results = []
-            for finding in scan_result.consensus_findings:
-                legacy_results.append({
-                    "file_path": finding.file,
-                    "line_number": finding.start_line,
-                    "severity": finding.severity,
-                    "score": finding.confidence * 10.0,
-                    "category": finding.cwe,
-                    "description": finding.message,
-                    "recommendation": f"Address {finding.cwe} vulnerability",
-                    "code_snippet": "",
-                })
-            
-            return render_template("results.html", results=legacy_results)
-        
-        except Exception as e:
-            flash(f"Error analyzing file: {str(e)}")
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            return redirect(url_for("main.index"))
-    
-    flash("Invalid file type. Please upload a ZIP file.")
-    return redirect(url_for("main.index"))
-
-
-@main_bp.route("/api/analyze", methods=["POST"])
-def api_analyze() -> Any:
-    """Legacy API analyze route."""
-    if "file" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
-    
-    file: FileStorage = request.files["file"]
-    
-    if not allowed_file(file.filename):
-        return jsonify({"error": "Invalid file type"}), 400
-    
-    try:
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-        file.save(filepath)
-        
-        source_files = extract_source_files(filepath)
-        
-        base_url = current_app.config.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        model_name = current_app.config.get("OLLAMA_MODEL", "gpt-oss:120b-cloud")
-        adapter = _registry.create_ollama_adapter(model_name, base_url)
-        
-        runner = MultiModelRunner()
-        scan_result = runner.run_scan(
-            source_files=source_files,
-            models=[adapter],
-        )
-        
-        os.remove(filepath)
-        
-        # Convert to legacy format
-        legacy_results = []
-        for finding in scan_result.consensus_findings:
-            legacy_results.append({
-                "file_path": finding.file,
-                "line_number": finding.start_line,
-                "severity": finding.severity,
-                "score": finding.confidence * 10.0,
-                "category": finding.cwe,
-                "description": finding.message,
-                "recommendation": f"Address {finding.cwe} vulnerability",
-                "code_snippet": "",
-            })
-        
-        return jsonify({"results": legacy_results})
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 
 @main_bp.route("/health")
