@@ -69,88 +69,97 @@ function renderScanStatus(data) {
 }
 
 function renderThreatOverview(data) {
-  const container = document.getElementById("threatOverview");
   const findings = data.consensus_findings || [];
 
+  // --- 1. Calculate Stats ---
   const critical = findings.filter(f => f.severity === "critical").length;
   const high = findings.filter(f => f.severity === "high").length;
-  const medium = findings.filter(f => f.severity === "medium").length;
-  const low = findings.filter(f => f.severity === "low").length;
-  const info = findings.filter(f => f.severity === "info").length;
 
-  const total = findings.length;
-  const highCritCount = critical + high;
+  document.getElementById("statCritical").textContent = critical;
+  document.getElementById("statHigh").textContent = high;
 
-  container.innerHTML = `
-    <div class="col-md-3">
-      <div class="threat-card" style="--threat-color: var(--brand-primary);">
-        <i class="bi bi-bullseye threat-icon"></i>
-        <div class="threat-value">${total}</div>
-        <div class="threat-label">Total Threats</div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="threat-card" style="--threat-color: ${critical > 0 ? '#7c3aed' : 'var(--status-danger)'};">
-        <i class="bi bi-exclamation-triangle-fill threat-icon"></i>
-        <div class="threat-value">${highCritCount}</div>
-        <div class="threat-label">Critical / High</div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="threat-card" style="--threat-color: var(--status-warning);">
-        <i class="bi bi-exclamation-circle threat-icon"></i>
-        <div class="threat-value">${medium}</div>
-        <div class="threat-label">Medium Severity</div>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="threat-card" style="--threat-color: var(--status-success);">
-        <i class="bi bi-info-circle threat-icon"></i>
-        <div class="threat-value">${low + info}</div>
-        <div class="threat-label">Low / Info</div>
-      </div>
-    </div>
-  `;
+  const affectedFiles = new Set(findings.map(f => f.file)).size;
+  const totalFiles = data.scan_metadata?.total_files || affectedFiles;
+  document.getElementById("statClean").textContent = Math.max(0, totalFiles - affectedFiles);
+
+  // --- 3. Render Threat Dial (Risk Score) ---
+  let riskScore = 0;
+  if (findings.length > 0) {
+    // Create a more dramatic score: High/Critical weight heavily
+    const weightedSum = (critical * 10) + (high * 5);
+    // Normalized against a "bad" scenario
+    const worstCase = findings.length * 5;
+    // If mostly crit/high, score approaches 100. If info/low, score is low.
+    // Let's use a simpler heuristic for visual impact:
+    // Score = (Crit*3 + High*2 + Low*1) / Total * 33 (roughly)
+    // Actually, let's just stick to the previous simple formula but ensure it's robust
+    const totalWeight = (critical * 10) + (high * 5) + (findings.length - critical - high);
+    riskScore = Math.min(100, Math.round((totalWeight / (findings.length * 10)) * 100));
+    if (findings.length > 0 && riskScore < 5) riskScore = 5; // Min score if findings exist
+  }
+
+  document.getElementById("riskScoreValue").textContent = riskScore + "%";
+
+  const maxStroke = 251;
+  const strokeValue = (riskScore / 100) * maxStroke;
+  const dial = document.getElementById("riskDialArc");
+  if (dial) dial.style.strokeDasharray = `${strokeValue}, ${maxStroke}`;
+
+  // --- 4. Render Heatmap ---
+  const heatmapContainer = document.getElementById("heatmapContainer");
+  if (!heatmapContainer) return;
+
+  heatmapContainer.innerHTML = "";
+
+  const fileMap = {};
+  findings.forEach(f => {
+    if (!fileMap[f.file]) fileMap[f.file] = { score: 0, highestSev: 'info' };
+    const weight = { critical: 4, high: 3, medium: 2, low: 1, info: 0 };
+    fileMap[f.file].score += weight[f.severity] || 0;
+    if ((weight[f.severity] || 0) > (weight[fileMap[f.file].highestSev] || 0)) {
+      fileMap[f.file].highestSev = f.severity;
+    }
+  });
+
+  const files = Object.keys(fileMap);
+  if (files.length === 0) {
+    heatmapContainer.innerHTML = '<div class="d-flex w-100 h-100 justify-content-center align-items-center text-muted small font-monospace">NO_THREAT_DATA</div>';
+  } else {
+    files.forEach(file => {
+      const data = fileMap[file];
+      const cell = document.createElement("div");
+      let cssClass = "cell-success";
+      let icon = "bi-file-earmark-check";
+
+      if (data.highestSev === 'critical' || data.highestSev === 'high') {
+        cssClass = "cell-danger";
+        icon = "bi-radioactive";
+      } else if (data.highestSev === 'medium') {
+        cssClass = "cell-warning";
+        icon = "bi-exclamation-triangle";
+      }
+      cell.className = `heatmap-cell ${cssClass}`;
+      cell.title = `${file}\nSeverity: ${data.highestSev.toUpperCase()}`;
+      cell.innerHTML = `<i class="bi ${icon}"></i><span class="fname">${file.split('/').pop()}</span>`;
+      heatmapContainer.appendChild(cell);
+    });
+  }
 }
 
 async function renderConsensusFindings(findings) {
   const container = document.getElementById("consensusFindings");
+  if (!container) return;
 
-  if (findings.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <i class="bi bi-shield-check"></i>
-        <h3 class="text-success mt-3 mb-2 text-uppercase" style="letter-spacing: 0.1em;">ALL CLEAR</h3>
-        <p class="lead text-muted">No security vulnerabilities detected in consensus analysis.</p>
-      </div>
-    `;
-    return;
-  }
+  async function renderFindingCard(finding) {
+    const severityColor = getSeverityColor(finding.severity);
+    const codeSnippet = await getCodeSnippet(
+      finding.file,
+      finding.start_line,
+      finding.end_line,
+      finding.severity
+    );
 
-  // Sort findings by severity
-  const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-  findings.sort((a, b) => {
-    return (severityOrder[a.severity] || 5) - (severityOrder[b.severity] || 5);
-  });
-
-  let html = "";
-  for (const finding of findings) {
-    html += await renderFindingCard(finding);
-  }
-
-  container.innerHTML = html;
-}
-
-async function renderFindingCard(finding) {
-  const severityColor = getSeverityColor(finding.severity);
-  const codeSnippet = await getCodeSnippet(
-    finding.file,
-    finding.start_line,
-    finding.end_line,
-    finding.severity
-  );
-
-  return `
+    return `
     <div class="vuln-card severity-${finding.severity}" style="--severity-color: ${severityColor};">
       <div class="p-3 border-bottom border-subtle">
         <div class="d-flex justify-content-between align-items-start">
@@ -183,15 +192,15 @@ async function renderFindingCard(finding) {
       </div>
     </div>
   `;
-}
+  }
 
-async function getCodeSnippet(filePath, startLine, endLine, severity) {
-  try {
-    const encodedPath = encodeURIComponent(filePath);
-    const response = await fetch(`/api/scan/${scanId}/file/${encodedPath}`);
+  async function getCodeSnippet(filePath, startLine, endLine, severity) {
+    try {
+      const encodedPath = encodeURIComponent(filePath);
+      const response = await fetch(`/api/scan/${scanId}/file/${encodedPath}`);
 
-    if (!response.ok) {
-      return `<div class="code-box">
+      if (!response.ok) {
+        return `<div class="code-box">
         <div class="code-box-header">
           <i class="bi bi-code-square"></i>
           <span>Source Code Unavailable</span>
@@ -201,19 +210,19 @@ async function getCodeSnippet(filePath, startLine, endLine, severity) {
           Unable to load source code for this file
         </div>
       </div>`;
-    }
+      }
 
-    const data = await response.json();
-    const content = data.content;
-    const lines = content.split("\n");
+      const data = await response.json();
+      const content = data.content;
+      const lines = content.split("\n");
 
-    // Context lines
-    const contextBefore = 5;
-    const contextAfter = 5;
-    const displayStart = Math.max(1, startLine - contextBefore);
-    const displayEnd = Math.min(lines.length, endLine + contextAfter);
+      // Context lines
+      const contextBefore = 5;
+      const contextAfter = 5;
+      const displayStart = Math.max(1, startLine - contextBefore);
+      const displayEnd = Math.min(lines.length, endLine + contextAfter);
 
-    let codeHtml = `
+      let codeHtml = `
       <div class="code-box">
         <div class="code-box-header">
           <i class="bi bi-code-square"></i>
@@ -223,28 +232,28 @@ async function getCodeSnippet(filePath, startLine, endLine, severity) {
         <div class="code-box-content">
     `;
 
-    for (let i = displayStart; i <= displayEnd; i++) {
-      const lineContent = lines[i - 1] || "";
-      const isVulnerable = i >= startLine && i <= endLine;
-      const lineClass = isVulnerable ? "vuln" : "context";
+      for (let i = displayStart; i <= displayEnd; i++) {
+        const lineContent = lines[i - 1] || "";
+        const isVulnerable = i >= startLine && i <= endLine;
+        const lineClass = isVulnerable ? "vuln" : "context";
 
-      codeHtml += `
+        codeHtml += `
         <div class="code-line ${lineClass}">
           <div class="code-line-number">${i}</div>
           <div class="code-line-content">${escapeHtml(lineContent)}</div>
         </div>
       `;
-    }
+      }
 
-    codeHtml += `
+      codeHtml += `
         </div>
       </div>
     `;
 
-    return codeHtml;
-  } catch (error) {
-    console.error("Error fetching code snippet:", error);
-    return `<div class="code-box">
+      return codeHtml;
+    } catch (error) {
+      console.error("Error fetching code snippet:", error);
+      return `<div class="code-box">
       <div class="code-box-header">
         <i class="bi bi-code-square"></i>
         <span>Error Loading Code</span>
@@ -254,38 +263,38 @@ async function getCodeSnippet(filePath, startLine, endLine, severity) {
         ${escapeHtml(error.message)}
       </div>
     </div>`;
+    }
   }
-}
 
-async function renderPerModelFindings(perModelFindings) {
-  const container = document.getElementById("perModelFindings");
+  async function renderPerModelFindings(perModelFindings) {
+    const container = document.getElementById("perModelFindings");
 
-  if (Object.keys(perModelFindings).length === 0) {
-    container.innerHTML = `
+    if (Object.keys(perModelFindings).length === 0) {
+      container.innerHTML = `
       <div class="empty-state">
         <i class="bi bi-cpu"></i>
         <h3 class="mt-3 mb-2 text-uppercase" style="letter-spacing: 0.1em;">No Model Data</h3>
         <p class="lead text-muted">No per-model findings available for this scan.</p>
       </div>
     `;
-    return;
-  }
+      return;
+    }
 
-  let html = "";
-  for (const [modelId, findings] of Object.entries(perModelFindings)) {
-    // Sort findings by severity
-    const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-    findings.sort((a, b) => {
-      return (severityOrder[a.severity] || 5) - (severityOrder[b.severity] || 5);
-    });
+    let html = "";
+    for (const [modelId, findings] of Object.entries(perModelFindings)) {
+      // Sort findings by severity
+      const severityOrder = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+      findings.sort((a, b) => {
+        return (severityOrder[a.severity] || 5) - (severityOrder[b.severity] || 5);
+      });
 
-    // Count by severity
-    const critical = findings.filter(f => f.severity === "critical").length;
-    const high = findings.filter(f => f.severity === "high").length;
-    const medium = findings.filter(f => f.severity === "medium").length;
-    const low = findings.filter(f => f.severity === "low").length;
+      // Count by severity
+      const critical = findings.filter(f => f.severity === "critical").length;
+      const high = findings.filter(f => f.severity === "high").length;
+      const medium = findings.filter(f => f.severity === "medium").length;
+      const low = findings.filter(f => f.severity === "low").length;
 
-    html += `
+      html += `
       <div class="model-intel-card">
         <div class="model-intel-header">
           <div class="d-flex justify-content-between align-items-center">
@@ -310,72 +319,72 @@ async function renderPerModelFindings(perModelFindings) {
         <div class="model-intel-body">
     `;
 
-    for (const finding of findings) {
-      html += await renderFindingCard(finding);
-    }
+      for (const finding of findings) {
+        html += await renderFindingCard(finding);
+      }
 
-    html += `
+      html += `
         </div>
       </div>
     `;
+    }
+
+    container.innerHTML = html;
   }
 
-  container.innerHTML = html;
-}
+  function getSeverityColor(severity) {
+    const colors = {
+      critical: "#7c3aed",
+      high: "#ef4444",
+      medium: "#f59e0b",
+      low: "#10b981",
+      info: "#06b6d4",
+    };
+    return colors[severity] || "#6b7280";
+  }
 
-function getSeverityColor(severity) {
-  const colors = {
-    critical: "#7c3aed",
-    high: "#ef4444",
-    medium: "#f59e0b",
-    low: "#10b981",
-    info: "#06b6d4",
-  };
-  return colors[severity] || "#6b7280";
-}
+  function escapeHtml(text) {
+    if (!text) return "";
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
 
-function escapeHtml(text) {
-  if (!text) return "";
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-function showError(message) {
-  document.getElementById("loading").style.display = "none";
-  document.getElementById("scanContent").innerHTML = `
+  function showError(message) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("scanContent").innerHTML = `
     <div class="empty-state">
       <i class="bi bi-x-circle" style="color: var(--status-danger);"></i>
       <h3 class="mt-3 mb-2 text-uppercase" style="letter-spacing: 0.1em; color: var(--status-danger);">Error</h3>
       <p class="lead text-muted">${escapeHtml(message)}</p>
     </div>
   `;
-  document.getElementById("scanContent").style.display = "block";
-}
-
-// Export functions
-function exportSARIF() {
-  window.location.href = `/api/scan/${scanId}/sarif`;
-}
-
-function exportCSV() {
-  window.location.href = `/api/scan/${scanId}/csv`;
-}
-
-async function exportJSON() {
-  try {
-    const response = await fetch(`/api/scan/${scanId}`);
-    const data = await response.json();
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `aegis_scan_${scanId}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch (error) {
-    alert("Error exporting JSON: " + error.message);
+    document.getElementById("scanContent").style.display = "block";
   }
-}
+
+  // Export functions
+  function exportSARIF() {
+    window.location.href = `/api/scan/${scanId}/sarif`;
+  }
+
+  function exportCSV() {
+    window.location.href = `/api/scan/${scanId}/csv`;
+  }
+
+  async function exportJSON() {
+    try {
+      const response = await fetch(`/api/scan/${scanId}`);
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `aegis_scan_${scanId}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert("Error exporting JSON: " + error.message);
+    }
+  }

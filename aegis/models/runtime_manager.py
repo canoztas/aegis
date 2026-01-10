@@ -12,7 +12,7 @@ from aegis.models.parser_factory import get_parser
 from aegis.models.provider_factory import ProviderCreationError, create_provider
 from aegis.models.runtime import resolve_runtime
 from aegis.models.runners import TriageRunner, DeepScanRunner, JudgeRunner, ExplainRunner
-from aegis.models.schema import ModelRecord, ModelRole
+from aegis.models.schema import ModelRecord, ModelRole, ModelType
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,44 @@ class ModelRuntime:
         self.keep_alive_seconds = self.runtime_spec.keep_alive_seconds
         self.last_used = time.time()
         self._semaphore = threading.Semaphore(self.runtime_spec.max_concurrency)
+
+        # Rate limiter and cost tracker for cloud providers
+        self.rate_limiter = None
+        self.cost_tracker = None
+        self._setup_cloud_features()
+
+    def _setup_cloud_features(self):
+        """Setup rate limiter and cost tracker for cloud providers."""
+        # Check if this is a cloud provider
+        is_cloud = self.model.model_type in (
+            ModelType.OPENAI_CLOUD,
+            ModelType.ANTHROPIC_CLOUD,
+            ModelType.GOOGLE_CLOUD,
+        )
+
+        if is_cloud:
+            try:
+                from aegis.models.rate_limiter import DEFAULT_RATE_LIMITER, configure_rate_limiter
+                from aegis.models.cost_tracker import DEFAULT_COST_TRACKER
+
+                # Configure rate limiter
+                provider_type = self.model.provider_id or self.model.model_type.value.replace("_cloud", "")
+                custom_rpm = self.settings.get("rate_limit", {}).get("rpm")
+
+                configure_rate_limiter(
+                    DEFAULT_RATE_LIMITER,
+                    provider_type,
+                    self.model.model_name,
+                    rpm=custom_rpm,
+                )
+
+                self.rate_limiter = DEFAULT_RATE_LIMITER
+                self.cost_tracker = DEFAULT_COST_TRACKER
+
+                logger.info(f"Enabled rate limiting and cost tracking for {provider_type}:{self.model.model_name}")
+
+            except Exception as e:
+                logger.warning(f"Failed to setup cloud features: {e}")
 
     def touch(self) -> None:
         self.last_used = time.time()
@@ -73,17 +111,78 @@ class ModelRuntime:
         self.runners[role] = runner
         return runner
 
-    async def run(self, prompt: str, context: Dict[str, Any], role: Optional[ModelRole] = None, **kwargs):
+    async def run(self, prompt: str, context: Dict[str, Any], role: Optional[ModelRole] = None, scan_id: Optional[str] = None, **kwargs):
         target_role = role or (self.model.roles[0] if self.model.roles else ModelRole.DEEP_SCAN)
         target_role = self._normalize_role(target_role)
         runner = self.get_runner(target_role)
         self.touch()
 
+        # Rate limiting for cloud providers
+        if self.rate_limiter:
+            provider_key = f"{self.model.provider_id}:{self.model.model_name}"
+            try:
+                await self.rate_limiter.acquire(provider_key, tokens=1.0, timeout=60.0)
+            except Exception as e:
+                logger.warning(f"Rate limit acquire failed: {e}")
+
         await asyncio.to_thread(self._semaphore.acquire)
         try:
-            return await runner.run(prompt, context, **kwargs)
+            # Track start time for cost calculation
+            start_time = time.time()
+
+            # Run the model
+            result = await runner.run(prompt, context, **kwargs)
+
+            # Cost tracking for cloud providers
+            if self.cost_tracker and hasattr(self.provider, "provider"):
+                self._log_api_usage(prompt, result, scan_id, start_time)
+
+            return result
         finally:
             self._semaphore.release()
+
+    def _log_api_usage(self, prompt: str, result: Any, scan_id: Optional[str], start_time: float):
+        """Log API usage and cost for cloud providers."""
+        try:
+            # Extract token usage from result metadata if available
+            input_tokens = getattr(result, "input_tokens", 0) or 0
+            output_tokens = getattr(result, "output_tokens", 0) or 0
+
+            # Estimate tokens if not provided (rough approximation)
+            if input_tokens == 0:
+                input_tokens = len(prompt) // 4  # ~4 chars per token
+
+            if output_tokens == 0 and hasattr(result, "findings"):
+                # Estimate based on findings
+                output_tokens = len(str(result.findings)) // 4
+
+            # Calculate cost
+            provider_type = self.model.provider_id or self.model.model_type.value.replace("_cloud", "")
+            cost_usd = 0.0
+
+            if provider_type == "openai":
+                from aegis.providers.openai_provider import calculate_cost
+                cost_usd = calculate_cost(self.model.model_name, input_tokens, output_tokens)
+            elif provider_type == "anthropic":
+                from aegis.providers.anthropic_provider import calculate_cost
+                cost_usd = calculate_cost(self.model.model_name, input_tokens, output_tokens)
+            elif provider_type == "google":
+                from aegis.providers.google_provider import calculate_cost
+                cost_usd = calculate_cost(self.model.model_name, input_tokens, output_tokens)
+
+            # Log to cost tracker
+            if cost_usd > 0:
+                self.cost_tracker.log_usage(
+                    provider=provider_type,
+                    model_name=self.model.model_name,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cost_usd=cost_usd,
+                    scan_id=scan_id,
+                )
+
+        except Exception as e:
+            logger.warning(f"Failed to log API usage: {e}")
 
     def close(self) -> None:
         close_fn = getattr(self.provider, "close", None)

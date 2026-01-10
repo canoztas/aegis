@@ -68,8 +68,155 @@
   <!-- Main Content -->
   <div id="scanContent" style="display: none;">
     <!-- Threat Overview Dashboard -->
-    <div class="row g-3 mb-4" id="threatOverview">
-      <!-- Populated by JS -->
+    <!-- Mission Control Grid -->
+    <div class="row g-4 mb-4">
+      <!-- Left Column: Threat Dials -->
+      <div class="col-lg-4">
+        <div class="card h-100 bg-panel border-subtle shadow-sm" style="border: 1px solid var(--border-subtle);">
+          <div class="card-header bg-black border-bottom border-subtle py-3">
+            <h6 class="mb-0 text-uppercase font-monospace text-light" style="letter-spacing: 0.1em;">
+              <i class="bi bi-speedometer2 me-2 text-primary"></i> Threat Dials
+            </h6>
+          </div>
+          <div class="card-body p-4 d-flex flex-column justify-content-center align-items-center gap-4">
+            <!-- Overall Risk Gauge -->
+            <div class="position-relative text-center">
+              <svg width="180" height="100" viewBox="0 0 180 100">
+                <defs>
+                  <linearGradient id="dialGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+                    <stop offset="50%" style="stop-color:#f59e0b;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#ef4444;stop-opacity:1" />
+                  </linearGradient>
+                </defs>
+                <!-- Background Arc -->
+                <path d="M10 90 A 80 80 0 0 1 170 90" fill="none" stroke="#1e293b" stroke-width="15"
+                  stroke-linecap="round" />
+                <!-- Active Arc (Dynamic Stroke Dasharray) -->
+                <path id="riskDialArc" d="M10 90 A 80 80 0 0 1 170 90" fill="none" stroke="url(#dialGradient)"
+                  stroke-width="15" stroke-linecap="round" stroke-dasharray="0, 251" />
+                <!-- Needle Base -->
+                <circle cx="90" cy="90" r="5" fill="#fff" />
+              </svg>
+              <div class="position-absolute start-50 top-100 translate-middle mb-4">
+                <h2 class="display-6 fw-bold text-light mb-0 font-monospace" id="riskScoreValue">--</h2>
+                <p class="text-secondary small text-uppercase font-monospace mb-0">Risk Score</p>
+              </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="d-flex w-100 justify-content-between px-3 border-top border-subtle pt-3">
+              <div class="text-center">
+                <div class="text-danger fw-bold fs-5 font-monospace" id="statCritical">0</div>
+                <div class="extra-small text-secondary text-uppercase">Critical</div>
+              </div>
+              <div class="text-center">
+                <div class="text-warning fw-bold fs-5 font-monospace" id="statHigh">0</div>
+                <div class="extra-small text-secondary text-uppercase">High</div>
+              </div>
+              <div class="text-center">
+                <div class="text-success fw-bold fs-5 font-monospace" id="statClean">0</div>
+                <div class="extra-small text-secondary text-uppercase">Safe Files</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Heatmap File Explorer -->
+      <div class="col-lg-8">
+        <div class="card h-100 bg-panel border-subtle shadow-sm" style="border: 1px solid var(--border-subtle);">
+          <div
+            class="card-header bg-black border-bottom border-subtle py-3 d-flex justify-content-between align-items-center">
+            <h6 class="mb-0 text-uppercase font-monospace text-light" style="letter-spacing: 0.1em;">
+              <i class="bi bi-grid-3x3 me-2 text-primary"></i> Target Topography
+            </h6>
+            <div class="d-flex gap-2">
+              <span
+                class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 font-monospace">HOT
+                ZONES</span>
+              <span
+                class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 font-monospace">SAFE
+                ZONES</span>
+            </div>
+          </div>
+          <div class="card-body p-0 position-relative">
+            <!-- Heatmap Grid -->
+            <style>
+              .heatmap-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+                gap: 1px;
+                background: var(--border-subtle);
+              }
+
+              .heatmap-cell {
+                aspect-ratio: 1;
+                background: var(--bg-surface);
+                position: relative;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                padding: 10px;
+                text-align: center;
+              }
+
+              .heatmap-cell:hover {
+                transform: scale(1.05);
+                z-index: 10;
+                box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+                border: 1px solid var(--brand-primary);
+              }
+
+              .heatmap-cell i {
+                font-size: 1.5rem;
+                margin-bottom: 5px;
+                opacity: 0.7;
+              }
+
+              .heatmap-cell .fname {
+                font-size: 0.7rem;
+                color: var(--text-secondary);
+                word-break: break-all;
+                line-height: 1.2;
+              }
+
+              /* Threat Levels */
+              .cell-danger {
+                background: rgba(239, 68, 68, 0.1);
+              }
+
+              .cell-danger i {
+                color: #ef4444;
+                text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+              }
+
+              .cell-warning {
+                background: rgba(245, 158, 11, 0.1);
+              }
+
+              .cell-warning i {
+                color: #f59e0b;
+              }
+
+              .cell-success {
+                background: rgba(16, 185, 129, 0.05);
+              }
+
+              .cell-success i {
+                color: #10b981;
+              }
+            </style>
+            <div id="heatmapContainer" class="heatmap-grid w-100 h-100"
+              style="min-height: 300px; max-height: 400px; overflow-y: auto;">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Main Intelligence Panel -->
@@ -88,6 +235,13 @@
               </li>
               <li class="nav-item me-2" role="presentation">
                 <button class="nav-link rounded-0 border-0 text-uppercase font-monospace small px-4 py-2"
+                  id="war-room-tab" data-bs-toggle="tab" data-bs-target="#war-room" type="button" role="tab"
+                  style="letter-spacing: 0.08em; color: var(--text-muted);">
+                  <i class="bi bi-diagram-3 me-2"></i> WAR_ROOM
+                </button>
+              </li>
+              <li class="nav-item me-2" role="presentation">
+                <button class="nav-link rounded-0 border-0 text-uppercase font-monospace small px-4 py-2"
                   id="per-model-tab" data-bs-toggle="tab" data-bs-target="#per-model" type="button" role="tab"
                   style="letter-spacing: 0.08em; color: var(--text-muted);">
                   <i class="bi bi-cpu me-2"></i> RAW_SIGNALS
@@ -97,22 +251,26 @@
           </div>
 
           <div class="card-body p-0 bg-panel">
-            <div class="tab-content" id="intelTabsContent">
-              <!-- Consensus Findings -->
-              <div class="tab-pane fade show active" id="consensus" role="tabpanel">
-                <div id="consensusFindings" class="p-4"></div>
-              </div>
+            <!-- Consensus Findings -->
+            <div class="tab-pane fade show active" id="consensus" role="tabpanel">
+              <div id="consensusFindings" class="p-4"></div>
+            </div>
 
-              <!-- Per-Model Findings -->
-              <div class="tab-pane fade" id="per-model" role="tabpanel">
-                <div id="perModelFindings" class="p-4"></div>
-              </div>
+            <!-- War Room (Matrix) -->
+            <div class="tab-pane fade" id="war-room" role="tabpanel">
+              <div id="warRoomContent" class="p-4"></div>
+            </div>
+
+            <!-- Per-Model Findings -->
+            <div class="tab-pane fade" id="per-model" role="tabpanel">
+              <div id="perModelFindings" class="p-4"></div>
             </div>
           </div>
         </div>
       </div>
     </div>
   </div>
+</div>
 </div>
 {% endblock %}
 

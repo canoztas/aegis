@@ -1,6 +1,7 @@
 from flask import Flask
 from aegis.routes import main_bp
 from aegis.api.routes_models import models_bp
+from aegis.api.routes_credentials import credentials_bp
 from aegis.config import Config
 
 
@@ -10,6 +11,7 @@ def create_app() -> Flask:
 
     app.register_blueprint(main_bp)
     app.register_blueprint(models_bp)  # Model management API
+    app.register_blueprint(credentials_bp)  # Credential management API
 
     return app
 
