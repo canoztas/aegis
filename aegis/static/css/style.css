@@ -1,133 +1,307 @@
-:root {
-  --primary-color: #dc3545;
-  --secondary-color: #6c757d;
-  --success-color: #28a745;
-  --warning-color: #ffc107;
-  --danger-color: #dc3545;
-  --info-color: #17a2b8;
-}
-
-/* HuggingFace Models Styling */
-.bg-gradient-purple {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-}
+/* Main Stylesheet referencing theme.css variables */
 
 body {
-  font-family: var(--font-primary, 'Inter'), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Oxygen", "Ubuntu", "Cantarell", sans-serif;
-  line-height: 1.6;
-  color: var(--text-primary, #333);
-  font-weight: 400;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+}
+
+/* Typography Overrides */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  color: var(--text-main);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  /* Tight tracking for modern feel */
+}
+
+a {
+  color: var(--brand-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--brand-hover);
+}
+
+.text-muted {
+  color: var(--text-secondary) !important;
+}
+
+/* 
+ * Glassmorphism Components 
+ */
+
+/* Navbar */
+.navbar-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  transition: border-color 0.3s ease;
 }
 
 .navbar-brand {
   font-weight: 800;
-  font-size: 1.5rem;
-  letter-spacing: -0.5px;
-  font-family: var(--font-primary, 'Inter'), sans-serif;
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  color: var(--text-main) !important;
 }
 
-.navbar-brand img {
-  height: 40px;
-  width: auto;
+.navbar-brand span {
+  background: linear-gradient(135deg, var(--brand-primary), var(--status-info));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.btn {
+.nav-link {
+  color: var(--text-secondary) !important;
   font-weight: 500;
-  border-radius: 0.5rem;
-  transition: all 0.2s ease-in-out;
+  transition: all 0.2s ease;
 }
 
-.btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+.nav-link:hover,
+.nav-link.active {
+  color: var(--brand-primary) !important;
 }
 
+/* Cards */
 .card {
-  border: none;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
   border-radius: 1rem;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
   transition: all 0.3s ease;
 }
 
-.card:hover {
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.12);
-}
-
-.upload-area {
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.upload-area:hover {
-  transform: scale(1.02);
-}
-
-.vulnerability-card {
-  border-radius: 0.75rem !important;
+.card-glass {
+  background: var(--bg-panel);
+  /* Fallback */
+  position: relative;
   overflow: hidden;
 }
 
-.vulnerability-card .card-header {
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
+[data-theme="dark"] .card-glass {
+  background: var(--glass-bg);
+  /* Only use glass in dark mode for depth */
+  border: 1px solid var(--glass-border);
 }
 
-.code-snippet {
-  max-height: 200px;
-  overflow-y: auto;
-  border-radius: 0.5rem;
-  font-family: var(--font-mono, 'JetBrains Mono'), 'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace;
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+  border-color: var(--brand-primary);
+}
+
+.card-header {
+  background-color: transparent;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 1.5rem;
+  font-weight: 600;
+}
+
+.card-body {
+  padding: 1.5rem;
+}
+
+/* Buttons */
+.btn {
+  font-weight: 600;
+  padding: 0.6rem 1.25rem;
+  border-radius: 0.75rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 0.01em;
+}
+
+.btn-primary {
+  background-color: var(--brand-primary);
+  border: 1px solid var(--brand-primary);
+  box-shadow: 0 4px 14px 0 var(--brand-glow);
+}
+
+.btn-primary:hover {
+  background-color: var(--brand-hover);
+  border-color: var(--brand-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.btn-outline-primary {
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+/* Form Elements */
+.form-control,
+.form-select {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.form-control:focus,
+.form-select:focus {
+  background-color: var(--bg-surface);
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 4px var(--brand-glow);
+  color: var(--text-main);
+}
+
+.form-label {
+  color: var(--text-secondary);
   font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+/* Upload Area */
+.upload-area {
+  background-color: var(--bg-surface);
+  border: 2px dashed var(--border-subtle);
+  border-radius: 1.5rem;
+  padding: 4rem 2rem;
+  text-align: center;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-area:hover {
+  border-color: var(--brand-primary);
+  background-color: var(--bg-panel);
+  transform: scale(1.01);
+}
+
+.upload-area.dragover {
+  border-color: var(--brand-primary);
+  background-color: rgba(99, 102, 241, 0.05);
+  box-shadow: inset 0 0 20px var(--brand-glow);
+}
+
+.upload-icon {
+  font-size: 3rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+  transition: color 0.3s ease;
+}
+
+.upload-area:hover .upload-icon {
+  color: var(--brand-primary);
+  transform: translateY(-5px);
+}
+
+/* Vulnerability Cards & Badges */
+.vulnerability-card {
+  border-left: 5px solid transparent;
+  /* Replaced by badge usually, but keeping for legacy compat */
+  position: relative;
+}
+
+[data-theme="dark"] .vulnerability-card {
+  border: 1px solid var(--glass-border);
 }
 
 .badge {
+  padding: 0.5em 0.8em;
   font-weight: 600;
-  font-size: 0.75em;
-  padding: 0.5em 0.75em;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
 }
 
-.spinner-border {
-  width: 3rem;
-  height: 3rem;
+.badge-low {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: var(--status-success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
-@media print {
-  .navbar,
-  .btn,
-  footer,
-  .no-print {
-    display: none !important;
+.badge-medium {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: var(--status-warning);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.badge-high {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--status-danger);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.badge-critical {
+  background-color: var(--status-danger);
+  color: white;
+  box-shadow: 0 2px 10px rgba(239, 68, 68, 0.4);
+}
+
+/* Code Blocks */
+.code-snippet {
+  background-color: #1e1e1e !important;
+  /* Always dark syntax for code */
+  color: #d4d4d4;
+  border: 1px solid var(--border-subtle);
+  border-radius: 0.75rem;
+  font-family: var(--font-mono);
+  padding: 1rem;
+}
+
+/* Footer */
+.footer-custom {
+  background-color: var(--bg-panel);
+  border-top: 1px solid var(--border-subtle);
+  padding: 2rem 0;
+  margin-top: auto;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
 
-  body {
-    font-size: 12pt;
-    color: #000;
-  }
-
-  .card {
-    border: 1px solid #000;
-    box-shadow: none;
-    break-inside: avoid;
-    margin-bottom: 1rem;
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@media (max-width: 768px) {
-  .container {
-    padding-left: 15px;
-    padding-right: 15px;
-  }
+.fade-in {
+  animation: fadeIn 0.5s ease forwards;
+}
 
-  .display-4 {
-    font-size: 2rem;
-  }
+.animate-delay-1 {
+  animation-delay: 0.1s;
+}
 
-  .card-body {
-    padding: 1rem;
-  }
+.animate-delay-2 {
+  animation-delay: 0.2s;
+}
+
+.animate-delay-3 {
+  animation-delay: 0.3s;
 }

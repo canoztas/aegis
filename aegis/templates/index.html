@@ -1,131 +1,184 @@
-{% extends "base.html" %} {% block title %}aegis - Upload Source Code{% endblock
-%} {% block content %}
-<div class="container py-5">
-  <div class="row justify-content-center mb-5">
-    <div class="col-md-10 text-center">
-      <div class="d-flex align-items-center justify-content-center gap-3 mb-3">
-        <img src="{{ url_for('static', filename='img/aegis-logo.svg') }}" alt="Aegis" style="height: 100px;">
-        <h1 class="display-4 mb-0">aegis</h1>
-      </div>
-      <p class="lead text-muted">
-        Upload your source code (ZIP format) for comprehensive security
-        vulnerability analysis using multiple AI models with consensus.
-      </p>
+{% extends "base.html" %}
+{% block title %}aegis - AI Security Scanner{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mb-5 fade-in">
+  <div class="col-md-10 col-lg-8 text-center">
+    <div class="d-flex align-items-center justify-content-center gap-3 mb-4">
+      <img src="{{ url_for('static', filename='img/aegis-logo.svg') }}" alt="Aegis"
+        style="height: 80px; filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.3));">
     </div>
+    <h1 class="display-5 fw-bold mb-3">
+      AI-Powered <span
+        style="background: linear-gradient(135deg, var(--brand-primary), var(--status-info)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Security
+        Analysis</span>
+    </h1>
+    <p class="lead text-muted mb-4">
+      Detect vulnerabilities with the consensus of multiple LLMs. <br>
+      Secure your code with next-generation static analysis.
+    </p>
   </div>
+</div>
 
-  <div class="row justify-content-center">
-    <div class="col-md-10">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <h5 class="card-title mb-4">
-            <i class="bi bi-upload"></i> New Security Scan
-          </h5>
+<div class="row justify-content-center fade-in animate-delay-1">
+  <div class="col-md-10 col-lg-8">
+    <div class="card card-glass border-0">
+      <div class="card-body p-4 p-lg-5">
+        <h4 class="card-title mb-4 d-flex align-items-center">
+          <i class="bi bi-rocket-takeoff me-2 text-primary"></i> Start New Scan
+        </h4>
 
-          <form id="scanForm" enctype="multipart/form-data">
-            <!-- File Upload -->
-            <div class="mb-4">
-              <label class="form-label">Source Code (ZIP)</label>
-              <div id="dropArea" class="upload-area mb-2">
-                <i class="bi bi-cloud-upload fs-1 text-muted mb-3 d-block"></i>
-                <h5>Drop your ZIP file here</h5>
-                <p class="text-muted mb-3">or click to browse files</p>
-                <input
-                  type="file"
-                  id="fileInput"
-                  name="file"
-                  accept=".zip"
-                  class="form-control"
-                  style="display: none"
-                  required
-                />
-                <button
-                  type="button"
-                  id="browseBtn"
-                  class="btn btn-outline-primary"
-                >
-                  <i class="bi bi-folder2-open"></i> Browse Files
-                </button>
-              </div>
-              <div id="fileInfo" class="alert alert-info" style="display: none">
-                <i class="bi bi-file-zip"></i>
-                <strong>Selected file:</strong> <span id="fileName"></span>
-                <br />
-                <small class="text-muted">Size: <span id="fileSize"></span></small>
-              </div>
+        <form id="scanForm" enctype="multipart/form-data">
+          <!-- File Upload -->
+          <div class="mb-5">
+            <label class="form-label d-block mb-3">Source Code <span
+                class="badge bg-secondary opacity-50 ms-2">ZIP</span></label>
+            <div id="dropArea" class="upload-area">
+              <i class="bi bi-cloud-arrow-up upload-icon"></i>
+              <h5 class="fw-bold">Drag & Drop Source Code</h5>
+              <p class="text-muted mb-4">Support for ZIP archives up to 50MB</p>
+
+              <input type="file" id="fileInput" name="file" accept=".zip" class="d-none" required />
+              <button type="button" id="browseBtn" class="btn btn-outline-primary px-4 py-2 rounded-pill">
+                Browse Files
+              </button>
             </div>
 
+            <div id="fileInfo" class="alert alert-info mt-3 shadow-none border d-flex align-items-center"
+              style="display: none">
+              <i class="bi bi-file-zip-fill fs-4 me-3"></i>
+              <div>
+                <strong id="fileName" class="d-block">filename.zip</strong>
+                <small class="text-muted" id="fileSize">1.2 MB</small>
+              </div>
+              <button type="button" class="btn-close ms-auto" id="removeFileBtn"></button>
+            </div>
+          </div>
+
+          <div class="row g-4 mb-4">
             <!-- Model Selection -->
-            <div class="mb-4">
-              <label class="form-label">Models <small class="text-muted">(Select one or more)</small></label>
-              <select id="modelsSelect" class="form-select" multiple size="5" required>
+            <div class="col-md-7">
+              <label class="form-label">AI Models</label>
+              <select id="modelsSelect" class="form-select" multiple size="4" required style="height: 140px;">
                 <option value="" disabled>Loading models...</option>
               </select>
-              <small class="text-muted d-block mt-2">
-                <i class="bi bi-info-circle"></i> Hold Ctrl/Cmd to select multiple models. 
-                <a href="{{ url_for('main.models_page') }}">Manage models</a>
-              </small>
+              <div class="d-flex justify-content-between mt-2">
+                <small class="text-muted">
+                  <i class="bi bi-command"></i> Ctrl/Cmd + Click to select multiple
+                </small>
+                <a href="{{ url_for('main.models_page') }}" class="text-decoration-none small fw-bold">
+                  Manage Models <i class="bi bi-arrow-right"></i>
+                </a>
+              </div>
             </div>
 
-
             <!-- Consensus Strategy -->
-            <div class="mb-4">
+            <div class="col-md-5">
               <label class="form-label">Consensus Strategy</label>
-              <select id="consensusStrategy" class="form-select">
-                <option value="union">Union (merge all findings)</option>
-                <option value="majority_vote">Majority Vote (>50% agreement)</option>
-                <option value="weighted_vote">Weighted Vote</option>
-                <option value="judge">Judge Model</option>
-              </select>
-              <div id="judgeModelSelect" class="mt-2" style="display: none;">
-                <label class="form-label">Judge Model</label>
-                <select id="judgeModelId" class="form-select">
+              <div class="bg-surface p-3 rounded-3 border border-subtle h-100">
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="radio" name="consensusStrategy" id="strategyUnion" value="union"
+                    checked>
+                  <label class="form-check-label" for="strategyUnion">
+                    <strong>Union</strong>
+                    <div class="small text-muted">Merge all findings</div>
+                  </label>
+                </div>
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="radio" name="consensusStrategy" id="strategyMajority"
+                    value="majority_vote">
+                  <label class="form-check-label" for="strategyMajority">
+                    <strong>Majority Vote</strong>
+                    <div class="small text-muted">>50% agreement</div>
+                  </label>
+                </div>
+                <div class="form-check mb-2">
+                  <input class="form-check-input" type="radio" name="consensusStrategy" id="strategyWeighted"
+                    value="weighted_vote">
+                  <label class="form-check-label" for="strategyWeighted">
+                    <strong>Weighted</strong>
+                    <div class="small text-muted">Confidence-based</div>
+                  </label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="radio" name="consensusStrategy" id="strategyJudge"
+                    value="judge">
+                  <label class="form-check-label" for="strategyJudge">
+                    <strong>Judge Model</strong>
+                    <div class="small text-muted">AI Arbitration</div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Judge Model Selection (Hidden by default) -->
+              <div id="judgeModelSelect" class="mt-3 fade-in" style="display: none;">
+                <label class="form-label small">Select Judge Model</label>
+                <select id="judgeModelId" class="form-select form-select-sm">
                   <option value="">Select judge model...</option>
                 </select>
               </div>
             </div>
-
-            <div class="d-grid">
-              <button
-                type="submit"
-                id="scanBtn"
-                class="btn btn-danger btn-lg"
-                disabled
-              >
-                <i class="bi bi-search"></i> Start Scan
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div
-    id="scanProgress"
-    class="row justify-content-center mt-5"
-    style="display: none"
-  >
-    <div class="col-md-10">
-      <div class="card">
-        <div class="card-body text-center">
-          <div class="spinner-border text-danger mb-3" role="status">
-            <span class="visually-hidden">Loading...</span>
           </div>
-          <h5>Scanning Your Code...</h5>
-          <p class="text-muted">This may take a few minutes depending on the size of your codebase.</p>
-          <div class="progress">
-            <div
-              class="progress-bar progress-bar-striped progress-bar-animated bg-danger"
-              role="progressbar"
-              style="width: 100%"
-            ></div>
+
+          <div class="d-grid mt-5">
+            <button type="submit" id="scanBtn" class="btn btn-primary btn-lg py-3 shadow-lg" disabled>
+              <i class="bi bi-search me-2"></i> Start Security Analysis
+            </button>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   </div>
 </div>
-{% endblock %} {% block scripts %}
+
+<!-- Progress Overlay -->
+<div id="scanProgress" class="position-fixed top-0 start-0 w-100 h-100 d-none"
+  style="background: var(--glass-bg); backdrop-filter: blur(10px); z-index: 2000;">
+  <div class="d-flex flex-column align-items-center justify-content-center h-100 p-4">
+    <div class="card card-glass border-0 shadow-lg" style="max-width: 500px; width: 100%;">
+      <div class="card-body text-center p-5">
+        <div class="mb-4">
+          <div class="spinner-border text-primary" role="status" style="width: 4rem; height: 4rem;">
+            <span class="visually-hidden">Loading...</span>
+          </div>
+        </div>
+        <h3 class="fw-bold mb-2">Scanning In Progress</h3>
+        <p class="text-muted mb-4">Analyzing source code structure and identifying vulnerabilities...</p>
+
+        <div class="progress" style="height: 8px;">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar"
+            style="width: 100%"></div>
+        </div>
+        <div class="mt-3 text-muted small">This may take a few minutes.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 <script src="{{ url_for('static', filename='js/scan.js') }}"></script>
+<script>
+  // Add Remove File functionality which was missing in original
+  document.getElementById('removeFileBtn')?.addEventListener('click', function () {
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileInfo').style.display = 'none';
+    document.getElementById('dropArea').style.display = 'block';
+    document.getElementById('scanBtn').disabled = true;
+  });
+
+  // Simple logic to show/hide Judge selection
+  document.querySelectorAll('input[name="consensusStrategy"]').forEach(radio => {
+    radio.addEventListener('change', function () {
+      const judgeDiv = document.getElementById('judgeModelSelect');
+      if (this.value === 'judge') {
+        judgeDiv.style.display = 'block';
+        setTimeout(() => judgeDiv.style.opacity = 1, 10);
+      } else {
+        judgeDiv.style.display = 'none';
+        judgeDiv.style.opacity = 0;
+      }
+    });
+  });
+</script>
 {% endblock %}

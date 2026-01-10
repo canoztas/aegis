@@ -1,97 +1,107 @@
-{% extends "base.html" %} {% block title %}Scan Results - aegis{% endblock %} {%
-block content %}
-<div class="container py-5">
-  <div class="row mb-4">
-    <div class="col-12">
-      <div class="d-flex justify-content-between align-items-center">
-        <div>
-          <h2><i class="bi bi-clipboard-data"></i> Scan Results</h2>
-          <p class="text-muted mb-0">Scan ID: <code id="scanId">{{ scan_id }}</code></p>
+{% extends "base.html" %}
+{% block title %}Scan Results - aegis{% endblock %}
+
+{% block content %}
+<div class="row mb-5 fade-in">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h2 class="fw-bold mb-1">Security Analysis Report</h2>
+        <div class="d-flex align-items-center text-muted gap-2">
+          <span>Scan ID:</span>
+          <code id="scanId" class="bg-surface px-2 py-1 rounded small">{{ scan_id }}</code>
         </div>
-        <div>
-          <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary">
-            <i class="bi bi-arrow-left"></i> New Scan
-          </a>
-        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('main.index') }}" class="btn btn-outline-primary">
+          <i class="bi bi-plus-lg me-1"></i> New Scan
+        </a>
       </div>
     </div>
   </div>
+</div>
 
-  <div id="loading" class="text-center py-5">
-    <div class="spinner-border text-primary" role="status">
-      <span class="visually-hidden">Loading...</span>
-    </div>
-    <p class="mt-3">Loading scan results...</p>
+<!-- Loading State -->
+<div id="loading" class="text-center py-5 fade-in">
+  <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+    <span class="visually-hidden">Loading...</span>
+  </div>
+  <h5 class="text-muted fw-normal">Retrieving analysis results...</h5>
+</div>
+
+<div id="scanContent" style="display: none;" class="fade-in animate-delay-1">
+  <!-- Key Metrics / Summary Cards -->
+  <div class="row g-4 mb-5" id="summaryCards">
+    <!-- Populated by JS -->
   </div>
 
-  <div id="scanContent" style="display: none;">
-    <!-- Summary Cards -->
-    <div class="row mb-4" id="summaryCards"></div>
+  <!-- Main Content Area -->
+  <div class="card card-glass border-0 shadow-sm mb-5">
+    <div
+      class="card-header bg-transparent border-bottom border-subtle pt-4 px-4 d-flex justify-content-between align-items-center">
+      <!-- Custom Tab Navigation -->
+      <ul class="nav nav-pills card-header-pills" id="resultsTabs" role="tablist">
+        <li class="nav-item me-1" role="presentation">
+          <button class="nav-link active rounded-pill px-4" id="consensus-tab" data-bs-toggle="tab"
+            data-bs-target="#consensus" type="button" role="tab">
+            <i class="bi bi-check-all me-1"></i> Consensus
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link rounded-pill px-4" id="per-model-tab" data-bs-toggle="tab" data-bs-target="#per-model"
+            type="button" role="tab">
+            <i class="bi bi-cpu me-1"></i> By Model
+          </button>
+        </li>
+      </ul>
 
-    <!-- Tabs -->
-    <ul class="nav nav-tabs mb-4" id="resultsTabs" role="tablist">
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link active"
-          id="consensus-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#consensus"
-          type="button"
-          role="tab"
-        >
-          Consensus Findings
+      <!-- Export Actions (Moved to Header) -->
+      <div class="dropdown">
+        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+          <i class="bi bi-download me-1"></i> Export
         </button>
-      </li>
-      <li class="nav-item" role="presentation">
-        <button
-          class="nav-link"
-          id="per-model-tab"
-          data-bs-toggle="tab"
-          data-bs-target="#per-model"
-          type="button"
-          role="tab"
-        >
-          Per-Model Findings
-        </button>
-      </li>
-    </ul>
-
-    <div class="tab-content" id="resultsTabsContent">
-      <!-- Consensus Findings -->
-      <div class="tab-pane fade show active" id="consensus" role="tabpanel">
-        <div id="consensusFindings"></div>
-      </div>
-
-      <!-- Per-Model Findings -->
-      <div class="tab-pane fade" id="per-model" role="tabpanel">
-        <div id="perModelFindings"></div>
+        <ul class="dropdown-menu dropdown-menu-end shadow">
+          <li>
+            <button class="dropdown-item" onclick="exportSARIF()">
+              <i class="bi bi-filetype-json me-2 text-primary"></i> SARIF Report
+            </button>
+          </li>
+          <li>
+            <button class="dropdown-item" onclick="exportCSV()">
+              <i class="bi bi-filetype-csv me-2 text-success"></i> CSV Spreadsheet
+            </button>
+          </li>
+          <li>
+            <hr class="dropdown-divider">
+          </li>
+          <li>
+            <button class="dropdown-item" onclick="exportJSON()">
+              <i class="bi bi-code-slash me-2 text-warning"></i> Raw JSON
+            </button>
+          </li>
+        </ul>
       </div>
     </div>
 
-    <!-- Export -->
-    <div class="row mt-4">
-      <div class="col-12">
-        <div class="card">
-          <div class="card-body">
-            <h6 class="card-title">
-              <i class="bi bi-download"></i> Export Results
-            </h6>
-            <button class="btn btn-outline-primary me-2" onclick="exportSARIF()">
-              <i class="bi bi-filetype-json"></i> Export as SARIF
-            </button>
-            <button class="btn btn-outline-secondary me-2" onclick="exportCSV()">
-              <i class="bi bi-filetype-csv"></i> Export as CSV
-            </button>
-            <button class="btn btn-outline-secondary" onclick="exportJSON()">
-              <i class="bi bi-filetype-json"></i> Export as JSON
-            </button>
-          </div>
+    <div class="card-body p-0">
+      <div class="tab-content" id="resultsTabsContent">
+        <!-- Consensus Findings -->
+        <div class="tab-pane fade show active" id="consensus" role="tabpanel">
+          <!-- Empty state handled by JS, otherwise list -->
+          <div id="consensusFindings" class="p-4"></div>
+        </div>
+
+        <!-- Per-Model Findings -->
+        <div class="tab-pane fade" id="per-model" role="tabpanel">
+          <div id="perModelFindings" class="p-4"></div>
         </div>
       </div>
     </div>
   </div>
 </div>
-{% endblock %} {% block scripts %}
-<script src="{{ url_for('static', filename='js/scan_detail.js') }}"></script>
+
 {% endblock %}
 
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/scan_detail.js') }}"></script>
+{% endblock %}

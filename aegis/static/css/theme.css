@@ -1,0 +1,74 @@
+:root {
+  /* 
+   * Modern Geometric Color Palette 
+   * Base: Zinc (Neutral, crisp)
+   * Primary: Indigo/Violet (Vibrant, tech-forward)
+   * Accent: Cyan (Electric)
+   */
+
+  /* Light Theme (Default) */
+  --bg-app: #f4f4f5;         /* Zinc-100 */
+  --bg-panel: #ffffff;       /* White */
+  --bg-surface: #fafafa;     /* Zinc-50 */
+  
+  --brand-primary: #6366f1;  /* Indigo-500 */
+  --brand-hover: #4f46e5;    /* Indigo-600 */
+  --brand-glow: rgba(99, 102, 241, 0.3);
+  
+  --text-main: #18181b;      /* Zinc-900 */
+  --text-secondary: #52525b; /* Zinc-600 */
+  --text-muted: #a1a1aa;     /* Zinc-400 */
+  
+  --border-subtle: #e4e4e7;  /* Zinc-200 */
+  --border-focus: #a5b4fc;   /* Indigo-200 */
+
+  /* Status Colors */
+  --status-success: #10b981; /* Emerald-500 */
+  --status-warning: #f59e0b; /* Amber-500 */
+  --status-danger: #ef4444;  /* Red-500 */
+  --status-info: #06b6d4;    /* Cyan-500 */
+
+  /* Glassmorphism Tokens */
+  --glass-bg: rgba(255, 255, 255, 0.8);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-blur: 16px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* Dark Theme Data Attribute */
+[data-theme="dark"] {
+  /* Zinc Dark Mode Palette */
+  --bg-app: #09090b;         /* Zinc-950 - Deepest black */
+  --bg-panel: #18181b;       /* Zinc-900 - Card bg */
+  --bg-surface: #27272a;     /* Zinc-800 - Input/Item bg */
+  
+  --brand-primary: #818cf8;  /* Indigo-400 - Lighter for dark mode */
+  --brand-hover: #6366f1;    /* Indigo-500 */
+  --brand-glow: rgba(129, 140, 248, 0.25);
+  
+  --text-main: #f4f4f5;      /* Zinc-100 */
+  --text-secondary: #a1a1aa; /* Zinc-400 */
+  --text-muted: #52525b;     /* Zinc-600 */
+  
+  --border-subtle: #27272a;  /* Zinc-800 */
+  --border-focus: #4338ca;   /* Indigo-700 */
+
+  /* Status Colors (Slightly desaturated for dark mode) */
+  --status-success: #34d399; /* Emerald-400 */
+  --status-warning: #fbbf24; /* Amber-400 */
+  --status-danger: #f87171;  /* Red-400 */
+  --status-info: #22d3ee;    /* Cyan-400 */
+
+  /* Glassmorphism Tokens */
+  --glass-bg: rgba(24, 24, 27, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.08); /* Subtle white border */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+}

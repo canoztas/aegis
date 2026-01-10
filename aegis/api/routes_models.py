@@ -471,3 +471,132 @@ def register_hf_preset() -> Any:
     except Exception as e:
         logger.error(f"HF preset registration failed: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@models_bp.route("/<model_id>/health", methods=["POST"])
+def health_check_model(model_id: str) -> Any:
+    """
+    Perform health check on a specific model.
+
+    Args:
+        model_id: Model identifier (URL parameter)
+
+    Body (optional):
+        {
+          "timeout": 30  # Health check timeout in seconds (default: 30)
+        }
+
+    Returns:
+        {
+          "model_id": "ollama:qwen2.5-coder:7b",
+          "healthy": true,
+          "response_time_ms": 1234.56,
+          "error": null
+        }
+    """
+    try:
+        registry = ModelRegistryV2()
+        model = registry.get_model(model_id)
+
+        if not model:
+            return jsonify({"error": "Model not found"}), 404
+
+        data = request.get_json() or {}
+        timeout = data.get("timeout", 30)
+
+        engine = ModelExecutionEngine(registry)
+        health_status = engine.health_check_model_sync(model, timeout=timeout)
+
+        return jsonify(health_status)
+
+    except Exception as e:
+        logger.error(f"Health check failed for {model_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@models_bp.route("/health/all", methods=["POST"])
+def health_check_all_models() -> Any:
+    """
+    Perform health checks on all registered models.
+
+    Body (optional):
+        {
+          "timeout": 30,  # Health check timeout per model (default: 30)
+          "status_filter": "registered"  # Only check models with this status
+        }
+
+    Returns:
+        {
+          "results": [
+            {
+              "model_id": "ollama:qwen2.5-coder:7b",
+              "healthy": true,
+              "response_time_ms": 1234.56,
+              "error": null
+            },
+            ...
+          ],
+          "summary": {
+            "total": 3,
+            "healthy": 2,
+            "unhealthy": 1
+          }
+        }
+    """
+    try:
+        data = request.get_json() or {}
+        timeout = data.get("timeout", 30)
+        status_filter = data.get("status_filter")
+
+        registry = ModelRegistryV2()
+        engine = ModelExecutionEngine(registry)
+
+        # Get models to check
+        if status_filter:
+            try:
+                status = ModelStatus(status_filter)
+                models = registry.list_models(status=status)
+            except ValueError:
+                return jsonify({"error": f"Invalid status: {status_filter}"}), 400
+        else:
+            models = registry.list_models()
+
+        if not models:
+            return jsonify({
+                "results": [],
+                "summary": {"total": 0, "healthy": 0, "unhealthy": 0}
+            })
+
+        # Run health checks concurrently
+        import asyncio
+
+        async def check_all():
+            tasks = [engine.health_check_model(model, timeout) for model in models]
+            return await asyncio.gather(*tasks, return_exceptions=True)
+
+        results = asyncio.run(check_all())
+
+        # Filter out exceptions and build response
+        health_results = []
+        for result in results:
+            if isinstance(result, Exception):
+                logger.error(f"Health check exception: {result}")
+                continue
+            health_results.append(result)
+
+        # Calculate summary
+        healthy_count = sum(1 for r in health_results if r.get("healthy"))
+        unhealthy_count = len(health_results) - healthy_count
+
+        return jsonify({
+            "results": health_results,
+            "summary": {
+                "total": len(health_results),
+                "healthy": healthy_count,
+                "unhealthy": unhealthy_count
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Health check all failed: {e}")
+        return jsonify({"error": str(e)}), 500

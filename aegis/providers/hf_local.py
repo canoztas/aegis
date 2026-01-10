@@ -247,6 +247,22 @@ class HFLocalProvider:
                 return result
 
             elif self.task_type == "text-generation":
+                def _extract_text(output: Any) -> Optional[str]:
+                    if isinstance(output, list) and output:
+                        item = output[0]
+                        if isinstance(item, dict):
+                            if "generated_text" in item:
+                                return item.get("generated_text")
+                            if "text" in item:
+                                return item.get("text")
+                        if isinstance(item, str):
+                            return item
+                    if isinstance(output, dict):
+                        return output.get("generated_text") or output.get("text")
+                    if isinstance(output, str):
+                        return output
+                    return None
+
                 # Merge default and provided kwargs
                 gen_kwargs = {
                     "max_new_tokens": 512,
@@ -257,11 +273,19 @@ class HFLocalProvider:
                 }
 
                 result = self._pipeline(prompt, **gen_kwargs)
+                text = _extract_text(result)
 
-                # Extract generated text
-                if isinstance(result, list) and len(result) > 0:
-                    return result[0].get("generated_text", "")
-                return result
+                # Retry once with min_new_tokens if we got an empty response
+                if text is None or not str(text).strip():
+                    fallback_kwargs = dict(gen_kwargs)
+                    min_new_tokens = fallback_kwargs.get("min_new_tokens")
+                    if not isinstance(min_new_tokens, int) or min_new_tokens <= 0:
+                        max_new = fallback_kwargs.get("max_new_tokens")
+                        fallback_kwargs["min_new_tokens"] = min(16, max_new) if isinstance(max_new, int) and max_new > 0 else 16
+                    result = self._pipeline(prompt, **fallback_kwargs)
+                    text = _extract_text(result)
+
+                return text if text is not None else result
 
             else:
                 raise ValueError(f"Unsupported task type: {self.task_type}")
