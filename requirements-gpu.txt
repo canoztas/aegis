@@ -1,0 +1,30 @@
+# GPU Requirements (CUDA 11.8)
+# Install with: pip install -r requirements-gpu.txt
+
+# Include base requirements (without torch)
+flask>=3.0.0
+werkzeug>=3.0.0
+requests>=2.31.0
+aiohttp>=3.9.0
+pydantic>=2.0.0
+transformers>=4.30.0
+onnxruntime-gpu>=1.15.0
+openai>=1.0.0
+anthropic>=0.18.0
+google-generativeai>=0.3.0
+cryptography>=41.0.0
+python-magic>=0.4.27
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# GPU-Optimized PyTorch (CUDA 11.8)
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch>=2.0.0+cu118
+torchvision>=0.15.0+cu118
+
+# GPU Acceleration Libraries
+accelerate>=0.20.0
+bitsandbytes>=0.41.0
+
+# Optional: Flash Attention (for faster inference)
+# flash-attn>=2.3.0  # Requires CUDA compiler
