@@ -53,6 +53,19 @@ Return only the JSON payload. No prose."""
         # Some configs may pass None; fall back to default
         self.prompt_template = tmpl if tmpl else self.DEFAULT_PROMPT_TEMPLATE
 
+    def build_prompt(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """Build a structured prompt for deep scan."""
+        context = context or {}
+        code = context.get("code", prompt)
+        file_path = context.get("file_path", "unknown")
+        formatted_prompt = self._build_prompt(
+            self.prompt_template,
+            code=code,
+            file_path=file_path
+        )
+        context["prompt"] = formatted_prompt
+        return formatted_prompt
+
     async def run(
         self,
         prompt: str,
@@ -71,17 +84,8 @@ Return only the JSON payload. No prose."""
             ParserResult with detailed findings
         """
         context = dict(context or {})
-
-        # Build structured prompt
-        code = context.get("code", prompt)
+        formatted_prompt = self.build_prompt(prompt, context)
         file_path = context.get("file_path", "unknown")
-
-        formatted_prompt = self._build_prompt(
-            self.prompt_template,
-            code=code,
-            file_path=file_path
-        )
-        context["prompt"] = formatted_prompt
 
         try:
             logger.debug(f"Running deep scan on {file_path}")

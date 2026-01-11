@@ -236,7 +236,8 @@ async function loadUsageData() {
 
     // Update usage table
     const tbody = document.getElementById("usageTableBody");
-    if (!data.by_provider || data.by_provider.length === 0) {
+    const byProvider = data.by_provider || data.models || [];
+    if (!byProvider || byProvider.length === 0) {
       tbody.innerHTML = `
         <tr>
           <td colspan="5" class="text-center text-muted py-4">
@@ -247,7 +248,7 @@ async function loadUsageData() {
       return;
     }
 
-    tbody.innerHTML = data.by_provider
+    tbody.innerHTML = byProvider
       .map(
         (item) => `
       <tr>
@@ -261,7 +262,7 @@ async function loadUsageData() {
           </span>
         </td>
         <td class="text-light">${item.model_name}</td>
-        <td class="text-end">${item.requests || 0}</td>
+        <td class="text-end">${item.requests || item.request_count || 0}</td>
         <td class="text-end">${(item.total_tokens || 0).toLocaleString()}</td>
         <td class="text-end pe-4 text-success fw-bold">$${(
           item.cost_usd || 0

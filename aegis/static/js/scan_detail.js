@@ -49,6 +49,8 @@ async function renderScanResults(data) {
     // Ignore storage errors
   }
 
+  window.currentFindings = [];
+
   // Render threat overview dashboard
   renderThreatOverview(data);
 
@@ -288,6 +290,12 @@ function renderWarRoom(data) {
 }
 
 async function renderFindingCard(finding) {
+  // Store finding for reference
+  if (!Array.isArray(window.currentFindings)) {
+    window.currentFindings = [];
+  }
+  const findingIndex = window.currentFindings.push(finding) - 1;
+
   const severityColor = getSeverityColor(finding.severity);
   const codeSnippet = await getCodeSnippet(
     finding.file,
@@ -306,10 +314,16 @@ async function renderFindingCard(finding) {
               <span class="badge bg-secondary font-monospace">${escapeHtml(finding.cwe || "CWE-UNKNOWN")}</span>
               ${finding.confidence ? `<span class="badge bg-info font-monospace">${(finding.confidence * 100).toFixed(0)}% CONFIDENCE</span>` : ""}
             </div>
-            <h5 class="mb-2 text-uppercase" style="letter-spacing: 0.05em; color: var(--text-main);">
-              <i class="bi bi-bug-fill me-2" style="color: ${severityColor};"></i>
-              ${escapeHtml(finding.name || "Unnamed Vulnerability")}
-            </h5>
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-2 text-uppercase" style="letter-spacing: 0.05em; color: var(--text-main);">
+                  <i class="bi bi-bug-fill me-2" style="color: ${severityColor};"></i>
+                  ${escapeHtml(finding.name || "Unnamed Vulnerability")}
+                </h5>
+                <button class="btn btn-sm btn-outline-primary rounded-0 font-monospace" 
+                        onclick="openCinematicInspector(window.currentFindings[${findingIndex}])">
+                    <i class="bi bi-eye me-2"></i>INSPECT_VECTOR
+                </button>
+            </div>
           </div>
         </div>
       </div>
@@ -469,6 +483,102 @@ async function renderPerModelFindings(perModelFindings) {
 
   container.innerHTML = html;
 }
+
+// --- Cinematic Inspector Logic ---
+let editorInstance = null;
+
+function openCinematicInspector(finding) {
+  const modalEl = document.getElementById('cinematicInspectorModal');
+  const modal = new bootstrap.Modal(modalEl);
+
+  // 1. Populate Metadata
+  document.getElementById('inspectorTitle').textContent = `VECTOR_ANALYSIS: ${finding.file}`;
+  document.getElementById('inspectorMeta').textContent = `${finding.severity.toUpperCase()}::CONFIDENCE_${(finding.confidence * 100).toFixed(0)}%`;
+  document.getElementById('inspectorVulnName').textContent = finding.name;
+  document.getElementById('inspectorLine').textContent = `Line ${finding.start_line} - ${finding.end_line}`;
+  document.getElementById('inspectorReasoning').textContent = finding.message;
+  document.getElementById('inspectorFix').textContent = "AI Remediation Analysis Pending..."; // Placeholder
+
+  modal.show();
+
+  // 2. Load Content & Init Editor (Wait for modal transition)
+  modalEl.addEventListener('shown.bs.modal', async () => {
+    // Fetch full file content if possible, simplistic approach here:
+    // We will just use the snippet logic or fetch file again.
+    // For a full editor, we ideally want the full file. 
+    // Let's try to fetch full file content.
+    try {
+      const encodedPath = encodeURIComponent(finding.file);
+      const res = await fetch(`/api/scan/${scanId}/file/${encodedPath}`);
+      const data = await res.json();
+
+      if (!editorInstance) {
+        // Determine language
+        let lang = 'plaintext';
+        if (finding.file.endsWith('.py')) lang = 'python';
+        if (finding.file.endsWith('.js')) lang = 'javascript';
+        if (finding.file.endsWith('.go')) lang = 'go';
+        if (finding.file.endsWith('.html')) lang = 'html';
+
+        // Init Monaco
+        editorInstance = monaco.editor.create(document.getElementById('monaco-container'), {
+          value: data.content,
+          language: lang,
+          theme: 'vs-dark', // we can customize this later to match aegis theme
+          readOnly: true,
+          minimap: { enabled: true },
+          fontSize: 14,
+          fontFamily: 'JetBrains Mono',
+          lineNumbers: 'on',
+          renderLineHighlight: 'all',
+          scrollBeyondLastLine: false,
+          automaticLayout: true
+        });
+      } else {
+        editorInstance.setValue(data.content);
+      }
+
+      // 3. Apply Decorations (Red Squiggle)
+      const decorations = [{
+        range: new monaco.Range(finding.start_line, 1, finding.end_line, 1000),
+        options: {
+          isWholeLine: true,
+          className: 'myContentClass',
+          glyphMarginClassName: 'myGlyphMarginClass',
+          inlineClassName: 'myInlineDecoration'
+        }
+      }];
+
+      // We need to keep track of decorations if we want to clear them, 
+      // but for this simple viewer we just overwrite.
+      // Note: Monaco 0.44 uses createDecorationsCollection or deltaDecorations
+      // Simplest for older/compat versions:
+      editorInstance.revealLineInCenter(finding.start_line);
+
+      // Custom styling injection for the highlight
+      // We can't easily inject dynamic CSS classes without defining them globally.
+      // We'll trust Monaco's selection or add a simple delta.
+      const collection = editorInstance.createDecorationsCollection([
+        {
+          range: new monaco.Range(finding.start_line, 1, finding.end_line, 1),
+          options: {
+            isWholeLine: true,
+            linesDecorationsClassName: 'myLineDecoration',
+            className: 'bg-danger bg-opacity-25' // Bootstrap class might not work inside shadow DOM easily
+          }
+        }
+      ]);
+
+    } catch (e) {
+      console.error("Failed to load file for inspector", e);
+      document.getElementById('monaco-container').innerHTML = `<div class="p-5 text-danger">FAILED_TO_LOAD_SOURCE: ${e.message}</div>`;
+    }
+  }, { once: true });
+}
+
+// Global expose for onclick
+window.openCinematicInspector = openCinematicInspector;
+
 
 function getSeverityColor(severity) {
   const colors = {

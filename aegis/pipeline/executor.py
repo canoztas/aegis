@@ -5,8 +5,10 @@ Linear execution for Phase B (DAG support in future phases).
 """
 
 import time
+import hashlib
 import uuid
-from typing import Dict, List, Optional, Any
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Optional, Any, Iterable
 from datetime import datetime
 
 from aegis.pipeline.schema import (
@@ -17,7 +19,7 @@ from aegis.pipeline.schema import (
     PipelineExecutionContext,
 )
 from aegis.models.registry import ModelRegistryV2
-from aegis.models.schema import ModelRole
+from aegis.models.schema import ModelRole, FindingCandidate, ParserResult
 from aegis.prompt_builder import PromptBuilder
 from aegis.consensus.engine import ConsensusEngine
 from aegis.data_models import ModelResponse, Finding
@@ -204,9 +206,7 @@ class PipelineExecutor:
             return self._execute_gate_step(step, context, emitter)
 
         elif step.kind == StepKind.TOOL:
-            # Tool execution deferred to Week 4
-            emitter.warning(f"Tool step '{step.id}' not yet implemented", {"step_id": step.id})
-            return {"findings": [], "metadata": {"status": "not_implemented"}}
+            return self._execute_tool_step(step, source_files, emitter)
 
         else:
             raise ValueError(f"Unknown step kind: {step.kind}")
@@ -233,19 +233,16 @@ class PipelineExecutor:
 
         for model in role_models:
             per_model_findings[model.model_id] = []
-            for file_path, content in source_files.items():
-                for chunk_content, line_start, line_end in chunk_file_lines(content, chunk_size):
-                    findings = self.execution_engine.run_model_to_findings(
-                        model=model,
-                        code=chunk_content,
-                        file_path=file_path,
-                        role=role_enum,
-                        line_start=line_start,
-                        line_end=line_end,
-                    )
-                    per_model_findings[model.model_id].extend(findings)
-                    for finding in findings:
-                        emitter.finding_emitted(finding.to_dict(), step.id)
+            per_model_findings[model.model_id].extend(
+                self._run_model_on_sources(
+                    model=model,
+                    role_enum=role_enum,
+                    source_files=source_files,
+                    emitter=emitter,
+                    step_id=step.id,
+                    chunk_size=chunk_size,
+                )
+            )
 
             model_responses.append(
                 ModelResponse(
@@ -294,19 +291,16 @@ class PipelineExecutor:
             per_model_findings[model_id] = []
             role_hint = model.roles[0] if model.roles else None
 
-            for file_path, content in source_files.items():
-                for chunk_content, line_start, line_end in chunk_file_lines(content, chunk_size):
-                    findings = self.execution_engine.run_model_to_findings(
-                        model=model,
-                        code=chunk_content,
-                        file_path=file_path,
-                        role=role_hint,
-                        line_start=line_start,
-                        line_end=line_end,
-                    )
-                    per_model_findings[model_id].extend(findings)
-                    for finding in findings:
-                        emitter.finding_emitted(finding.to_dict(), step.id)
+            per_model_findings[model_id].extend(
+                self._run_model_on_sources(
+                    model=model,
+                    role_enum=role_hint,
+                    source_files=source_files,
+                    emitter=emitter,
+                    step_id=step.id,
+                    chunk_size=chunk_size,
+                )
+            )
 
             model_responses.append(
                 ModelResponse(
@@ -347,6 +341,71 @@ class PipelineExecutor:
             return ModelRole(role)
         except Exception:
             return mapping.get(role.lower())
+
+    def _chunk_batches(self, chunks: List[Dict[str, Any]], batch_size: int) -> Iterable[List[Dict[str, Any]]]:
+        if batch_size <= 1:
+            for chunk in chunks:
+                yield [chunk]
+            return
+        for i in range(0, len(chunks), batch_size):
+            yield chunks[i:i + batch_size]
+
+    def _run_model_on_sources(
+        self,
+        model,
+        role_enum,
+        source_files: Dict[str, str],
+        emitter: EventEmitter,
+        step_id: str,
+        chunk_size: int,
+    ) -> List[Finding]:
+        settings = model.settings or {}
+        runtime_cfg = settings.get("runtime", {})
+        batch_size = int(settings.get("batch_size") or 1)
+        max_workers = int(settings.get("chunk_workers") or runtime_cfg.get("max_concurrency") or self.max_workers)
+        max_workers = max(1, max_workers)
+
+        collected: List[Finding] = []
+
+        for file_path, content in source_files.items():
+            chunks: List[Dict[str, Any]] = []
+            for chunk_content, line_start, line_end in chunk_file_lines(content, chunk_size):
+                chunks.append({
+                    "code": chunk_content,
+                    "file_path": file_path,
+                    "line_start": line_start,
+                    "line_end": line_end,
+                    "snippet": chunk_content,
+                })
+
+            if not chunks:
+                continue
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                batches = list(self._chunk_batches(chunks, batch_size))
+                futures = [
+                    executor.submit(
+                        self.execution_engine.run_model_batch_to_findings,
+                        model,
+                        batch,
+                        role_enum,
+                    )
+                    for batch in batches
+                ]
+
+                for future in futures:
+                    try:
+                        batch_findings = future.result()
+                    except Exception as e:
+                        emitter.warning(f"Batch failed for model {model.model_id}: {e}", {"model_id": model.model_id})
+                        continue
+
+                    for chunk_findings in batch_findings:
+                        collected.extend(chunk_findings)
+                        for finding in chunk_findings:
+                            emitter.finding_emitted(finding.to_dict(), step_id)
+
+        return collected
 
     def _execute_consensus_step(
         self,
@@ -451,6 +510,60 @@ class PipelineExecutor:
                 "debug_info": result.debug_info,
                 "on_true": step.on_true,
                 "on_false": step.on_false,
+            },
+        }
+
+    def _candidate_to_finding(self, candidate: FindingCandidate) -> Finding:
+        fingerprint_src = (
+            f"{candidate.file_path}|{candidate.line_start}|{candidate.line_end}|"
+            f"{candidate.category}|{candidate.description}"
+        )
+        fingerprint = hashlib.sha1(fingerprint_src.encode("utf-8")).hexdigest()
+
+        return Finding(
+            name=candidate.title or candidate.category,
+            severity=str(candidate.severity).lower(),
+            cwe=candidate.cwe or candidate.metadata.get("cwe", "CWE-000"),
+            file=candidate.file_path,
+            start_line=int(candidate.line_start or 0),
+            end_line=int(candidate.line_end or candidate.line_start or 0),
+            message=candidate.description,
+            confidence=float(candidate.confidence or 0.0),
+            fingerprint=fingerprint,
+        )
+
+    def _execute_tool_step(
+        self,
+        step: PipelineStep,
+        source_files: Dict[str, str],
+        emitter: EventEmitter,
+    ) -> Dict[str, Any]:
+        from aegis.tools import DEFAULT_TOOL_REGISTRY
+
+        tool = DEFAULT_TOOL_REGISTRY.get(step.tool_id)
+        if not tool:
+            raise ValueError(f"Tool '{step.tool_id}' not found")
+
+        result = tool.analyze_project(source_files, step.tool_config or {})
+        if not isinstance(result, ParserResult):
+            raise ValueError(f"Tool '{step.tool_id}' returned unsupported result type")
+
+        if result.parse_errors:
+            emitter.warning(
+                f"Tool '{step.tool_id}' parse errors",
+                {"tool_id": step.tool_id, "errors": result.parse_errors},
+            )
+
+        findings = [self._candidate_to_finding(c) for c in result.findings]
+        for finding in findings:
+            emitter.finding_emitted(finding.to_dict(), step.id)
+
+        return {
+            "findings": [f.to_dict() for f in findings],
+            "metadata": {
+                "tool_id": step.tool_id,
+                "findings_count": len(findings),
+                "parse_errors": result.parse_errors,
             },
         }
 

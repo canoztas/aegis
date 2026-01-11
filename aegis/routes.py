@@ -12,6 +12,8 @@ from flask import (
     current_app,
     Response,
     stream_with_context,
+    redirect,
+    url_for,
 )
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
@@ -22,6 +24,7 @@ from aegis.data_models import ScanResult, Finding
 from aegis.models.registry import ModelRegistryV2 as NewModelRegistry
 from aegis.models.schema import ModelStatus
 from aegis.services.scan_service import ScanService, ScanState
+from aegis.services.scan_worker import ScanJob
 
 main_bp = Blueprint("main", __name__)
 
@@ -55,6 +58,26 @@ _scan_service = ScanService(
     use_v2=_use_v2,
     get_v2_repositories=get_v2_repositories,
 )
+_scan_worker = None
+
+
+def init_scan_worker(app) -> None:
+    """Initialize background scan worker and requeue pending scans."""
+    global _scan_worker
+    if _scan_worker is None:
+        from aegis.services.scan_worker import ScanWorker
+        _scan_worker = ScanWorker(
+            scan_service=_scan_service,
+            use_v2=_use_v2,
+            get_v2_repositories=get_v2_repositories,
+        )
+        _scan_worker.start(app)
+        _scan_worker.requeue_pending()
+
+
+def get_scan_worker():
+    """Return the background scan worker."""
+    return _scan_worker
 
 
 @main_bp.after_request
@@ -101,7 +124,7 @@ def scan_progress(scan_id: str) -> str:
 @main_bp.route("/settings")
 def settings_page() -> str:
     """Settings and credentials management page."""
-    return render_template("settings.html")
+    return redirect(url_for("main.models_page"))
 
 
 # API Routes
@@ -184,13 +207,21 @@ def create_scan() -> Any:
             except Exception as e:
                 print(f"Warning: Failed to create scan record: {e}")
 
-        # Start background scan
-        thread = threading.Thread(
-            target=_scan_service.run_background,
-            args=(scan_id, source_files, valid_model_ids, consensus_strategy, current_app._get_current_object())
-        )
-        thread.daemon = True
-        thread.start()
+        # Start background scan via worker (reconnectable)
+        worker = get_scan_worker()
+        if worker is None:
+            init_scan_worker(current_app._get_current_object())
+            worker = get_scan_worker()
+
+        if worker is None:
+            raise RuntimeError("Scan worker failed to initialize")
+
+        worker.enqueue(ScanJob(
+            scan_id=scan_id,
+            source_files=source_files,
+            model_ids=valid_model_ids,
+            consensus_strategy=consensus_strategy,
+        ))
 
         # Clean up uploaded file
         if filepath and os.path.exists(filepath):
@@ -212,8 +243,19 @@ def create_scan() -> Any:
 @main_bp.route("/api/scan/<scan_id>/status", methods=["GET"])
 def get_scan_status(scan_id: str) -> Any:
     """Get scan status."""
-    status = _scan_status.get(scan_id, "unknown")
-    return jsonify({"scan_id": scan_id, "status": status})
+    status = _scan_status.get(scan_id)
+    
+    if not status and _use_v2:
+        # Fallback to database
+        scan_repo, _ = get_v2_repositories()
+        try:
+            scan_data = scan_repo.get_by_scan_id(scan_id)
+            if scan_data:
+                status = scan_data.get("status")
+        except Exception:
+            pass
+
+    return jsonify({"scan_id": scan_id, "status": status or "unknown"})
 
 
 @main_bp.route("/api/scan/<scan_id>/cancel", methods=["POST"])
@@ -342,13 +384,21 @@ def retry_scan(scan_id: str) -> Any:
             if not model_ids:
                 return jsonify({"error": "No models available for retry"}), 400
 
-            # Start background scan
-            thread = threading.Thread(
-                target=_scan_service.run_background,
-                args=(new_scan_id, source_files, model_ids, consensus_strategy, current_app._get_current_object())
-            )
-            thread.daemon = True
-            thread.start()
+            # Start background scan via worker
+            worker = get_scan_worker()
+            if worker is None:
+                init_scan_worker(current_app._get_current_object())
+                worker = get_scan_worker()
+
+            if worker is None:
+                raise RuntimeError("Scan worker failed to initialize")
+
+            worker.enqueue(ScanJob(
+                scan_id=new_scan_id,
+                source_files=source_files,
+                model_ids=model_ids,
+                consensus_strategy=consensus_strategy,
+            ))
 
             return jsonify({
                 "scan_id": new_scan_id,

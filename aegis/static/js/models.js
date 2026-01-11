@@ -388,16 +388,28 @@ async function registerOllamaQuick(name) {
     const payload = {
       model_id: `ollama:${name}`,
       provider_id: 'ollama',
+      model_type: 'ollama_local',
       model_name: name,
       display_name: name,
       roles: ['deep_scan']
     };
-    await fetch("/api/models/registry", {
+    const response = await fetch("/api/models/registry", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
-    alert("Model Registered");
+
+    if (!response.ok) {
+      const text = await response.text();
+      let errMsg = text;
+      try {
+        const json = JSON.parse(text);
+        if (json.error) errMsg = json.error;
+      } catch (e) { }
+      throw new Error(errMsg || `HTTP ${response.status}`);
+    }
+
+    alert("Model Registered Successfully");
     loadRegisteredModels();
     loadOllamaModels(false);
   } catch (e) {
@@ -441,7 +453,71 @@ async function pullOllamaModel() {
 }
 
 async function addCloudModel() {
-  alert("Function disabled in tactical mode.");
+  const providerType = document.getElementById("cloudProviderType").value;
+  const providerIdInput = document.getElementById("cloudProviderId").value.trim();
+  const modelName = document.getElementById("cloudModelName").value.trim();
+  const displayName = document.getElementById("cloudDisplayName").value.trim();
+  const apiKey = document.getElementById("cloudApiKey").value.trim();
+  const baseUrl = document.getElementById("cloudBaseUrl").value.trim();
+  const parserId = document.getElementById("cloudParserId").value.trim() || "json_schema";
+
+  const roles = [];
+  if (document.getElementById("cloudRoleTriage").checked) roles.push("triage");
+  if (document.getElementById("cloudRoleDeep").checked) roles.push("deep_scan");
+  if (document.getElementById("cloudRoleJudge").checked) roles.push("judge");
+  if (document.getElementById("cloudRoleExplain").checked) roles.push("explain");
+
+  if (!modelName) {
+    alert("Model name is required.");
+    return;
+  }
+
+  const defaultProviderIds = {
+    openai_cloud: "openai",
+    anthropic_cloud: "anthropic",
+    google_cloud: "google",
+    openai_compatible: "openai"
+  };
+  const providerId = providerIdInput || defaultProviderIds[providerType] || providerType;
+
+  const settings = {};
+  if (apiKey) settings.api_key = apiKey;
+  if (baseUrl) settings.base_url = baseUrl;
+
+  const payload = {
+    model_type: providerType,
+    provider_id: providerId,
+    model_name: modelName,
+    display_name: displayName || modelName,
+    roles: roles.length ? roles : ["deep_scan"],
+    parser_id: parserId,
+    settings: settings
+  };
+
+  try {
+    const response = await fetch("/api/models/registry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      let errMsg = text;
+      try {
+        const json = JSON.parse(text);
+        if (json.error) errMsg = json.error;
+      } catch (e) { }
+      throw new Error(errMsg || "Cloud registration failed");
+    }
+    alert("Cloud model registered");
+    document.getElementById("cloudModelName").value = "";
+    document.getElementById("cloudDisplayName").value = "";
+    document.getElementById("cloudApiKey").value = "";
+    document.getElementById("cloudBaseUrl").value = "";
+    loadRegisteredModels();
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
 }
 
 function seedBuiltinModels() {

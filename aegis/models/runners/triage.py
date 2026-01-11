@@ -41,6 +41,7 @@ class TriageRunner(BaseRunner):
             ParserResult with triage signal and/or findings
         """
         context = context or {}
+        formatted_prompt = self.build_prompt(prompt, context)
 
         try:
             # Execute model
@@ -48,10 +49,10 @@ class TriageRunner(BaseRunner):
 
             if hasattr(self.provider, 'analyze'):
                 # Async provider (HF)
-                raw_output = await self.provider.analyze(prompt, context, **kwargs)
+                raw_output = await self.provider.analyze(formatted_prompt, context, **kwargs)
             elif hasattr(self.provider, 'generate'):
                 # Sync provider (Ollama)
-                raw_output = self.provider.generate(prompt)
+                raw_output = self.provider.generate(formatted_prompt)
             else:
                 raise ValueError(f"Provider {self.provider} has no analyze() or generate() method")
 

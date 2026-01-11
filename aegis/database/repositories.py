@@ -337,6 +337,28 @@ class ScanRepository:
                 results.append(result)
             return results
 
+    def list_by_statuses(self, statuses: List[str], limit: int = 100) -> List[Dict[str, Any]]:
+        """List scans matching any of the provided statuses."""
+        if not statuses:
+            return []
+        placeholders = ",".join(["?"] * len(statuses))
+        db = get_db()
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"""
+                SELECT * FROM scans
+                WHERE status IN ({placeholders})
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (*statuses, limit))
+            results = []
+            for row in cursor.fetchall():
+                result = dict(row)
+                if result.get('pipeline_config_json'):
+                    result['pipeline_config'] = json.loads(result['pipeline_config_json'])
+                results.append(result)
+            return results
+
     def add_file(self, scan_id: str, file_path: str, content: str, language: str):
         """Add source file to scan."""
         db = get_db()

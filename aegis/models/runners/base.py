@@ -69,3 +69,11 @@ class BaseRunner(ABC):
             Formatted prompt
         """
         return template.format(**variables)
+
+    def build_prompt(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
+        """
+        Build a prompt for execution.
+
+        Default behavior is passthrough. Runners can override to apply templates.
+        """
+        return prompt

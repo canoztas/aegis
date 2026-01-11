@@ -156,6 +156,49 @@ class ModelExecutionEngine:
         runtime = self.runtime_manager.get_runtime(model)
         return asyncio.run(runtime.run(prompt, context, role=role))
 
+    def run_model_batch_sync(
+        self,
+        model: ModelRecord,
+        chunks: List[Dict[str, Any]],
+        role: Optional[ModelRole] = None,
+    ) -> List[ParserResult]:
+        """Run a model synchronously on a batch of chunk contexts."""
+        if not chunks:
+            return []
+
+        runtime = self.runtime_manager.get_runtime(model)
+        target_role = role or (model.roles[0] if model.roles else ModelRole.DEEP_SCAN)
+        runner = runtime.get_runner(target_role)
+
+        prompts: List[str] = []
+        contexts: List[Dict[str, Any]] = []
+        for chunk in chunks:
+            context = {
+                "code": chunk.get("code"),
+                "file_path": chunk.get("file_path"),
+                "line_start": chunk.get("line_start"),
+                "line_end": chunk.get("line_end"),
+                "snippet": chunk.get("snippet") or chunk.get("code"),
+            }
+            prompt = runner.build_prompt(chunk.get("code", ""), context)
+            prompts.append(prompt)
+            contexts.append(context)
+
+        return asyncio.run(runtime.run_batch(prompts, contexts, role=target_role))
+
+    def run_model_batch_to_findings(
+        self,
+        model: ModelRecord,
+        chunks: List[Dict[str, Any]],
+        role: Optional[ModelRole] = None,
+    ) -> List[List[Finding]]:
+        """Execute model on a batch of chunks and return findings per chunk."""
+        results = self.run_model_batch_sync(model=model, chunks=chunks, role=role)
+        findings_per_chunk: List[List[Finding]] = []
+        for result in results:
+            findings_per_chunk.append([_candidate_to_finding(c) for c in result.findings])
+        return findings_per_chunk
+
     def run_model_to_findings(
         self,
         model: ModelRecord,

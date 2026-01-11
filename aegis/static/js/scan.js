@@ -3,7 +3,6 @@ document.addEventListener("DOMContentLoaded", function () {
   loadModels();
   setupFileUpload();
   setupConsensusStrategy();
-  initResumeScanCard();
 });
 
 // Helper for JSON Fetching
@@ -81,46 +80,6 @@ async function loadModels() {
 
   } catch (error) {
     console.error("Error loading models:", error);
-  }
-}
-
-async function initResumeScanCard() {
-  const card = document.getElementById("resumeScanCard");
-  if (!card) return;
-
-  const scanId = localStorage.getItem("aegis_last_scan_id");
-  if (!scanId) return;
-
-  const status = await fetchScanStatus(scanId) || localStorage.getItem("aegis_last_scan_status");
-  if (!status) return;
-
-  const resumeBtn = document.getElementById("resumeScanBtn");
-  const viewBtn = document.getElementById("viewScanBtn");
-
-  document.getElementById("resumeScanId").textContent = scanId;
-  document.getElementById("resumeScanStatus").textContent = status.toUpperCase();
-
-  card.classList.remove("d-none");
-
-  const isActive = status === "running" || status === "pending";
-  if (resumeBtn) {
-    resumeBtn.style.display = isActive ? "inline-block" : "none";
-    resumeBtn.onclick = () => window.location.href = `/scan/${scanId}/progress`;
-  }
-  if (viewBtn) {
-    viewBtn.style.display = isActive ? "none" : "inline-block";
-    viewBtn.onclick = () => window.location.href = `/scan/${scanId}`;
-  }
-}
-
-async function fetchScanStatus(scanId) {
-  try {
-    const response = await fetch(`/api/scan/${scanId}/status`);
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.status || null;
-  } catch (e) {
-    return null;
   }
 }
 

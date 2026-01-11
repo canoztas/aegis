@@ -268,6 +268,35 @@ class HFLocalProvider:
         """Synchronous analysis (runs in thread pool)."""
         self._ensure_pipeline()
 
+        def _extract_text(output: Any) -> Optional[str]:
+            if isinstance(output, list) and output:
+                item = output[0]
+                if isinstance(item, dict):
+                    if "generated_text" in item:
+                        return item.get("generated_text")
+                    if "text" in item:
+                        return item.get("text")
+                if isinstance(item, str):
+                    return item
+            if isinstance(output, dict):
+                return output.get("generated_text") or output.get("text")
+            if isinstance(output, str):
+                return output
+            return None
+
+        def _strip_prompt(text: Optional[str], prompt_text: str) -> Optional[str]:
+            if not text or not prompt_text:
+                return text
+            try:
+                prompt_stripped = prompt_text.strip()
+                text_stripped = text.strip()
+                if text_stripped.startswith(prompt_stripped):
+                    remainder = text_stripped[len(prompt_stripped):].lstrip()
+                    return remainder
+            except Exception:
+                return text
+            return text
+
         try:
             if self.task_type == "text-classification":
                 # Classification returns list of label/score dicts
@@ -275,6 +304,70 @@ class HFLocalProvider:
                 return result
 
             elif self.task_type == "text-generation":
+                # Merge default and provided kwargs
+                gen_kwargs = {
+                    "max_new_tokens": 512,
+                    "temperature": 0.1,
+                    "do_sample": True,
+                    "return_full_text": False,
+                }
+                gen_kwargs.update(self.generation_kwargs)
+                gen_kwargs.update(generation_kwargs)
+
+                # Some models echo the prompt even with return_full_text=False
+                result = self._pipeline(prompt, **gen_kwargs)
+                text = _strip_prompt(_extract_text(result), prompt)
+
+                # Retry once with min_new_tokens if we got an empty response
+                if text is None or not str(text).strip():
+                    fallback_kwargs = dict(gen_kwargs)
+                    min_new_tokens = fallback_kwargs.get("min_new_tokens")
+                    if not isinstance(min_new_tokens, int) or min_new_tokens <= 0:
+                        max_new = fallback_kwargs.get("max_new_tokens")
+                        fallback_kwargs["min_new_tokens"] = min(32, max_new) if isinstance(max_new, int) and max_new > 0 else 32
+                    result = self._pipeline(prompt, **fallback_kwargs)
+                    text = _strip_prompt(_extract_text(result), prompt)
+
+                return text if text is not None else result
+
+            else:
+                raise ValueError(f"Unsupported task type: {self.task_type}")
+
+        except Exception as e:
+            logger.error(f"HF model inference failed: {e}")
+            raise
+
+    def analyze_sync(self, prompt: str, **generation_kwargs) -> Any:
+        """Synchronous version of analyze."""
+        return self._analyze_sync(prompt, generation_kwargs)
+
+    async def analyze_batch(
+        self,
+        prompts: List[str],
+        context: Optional[Dict[str, Any]] = None,
+        **generation_kwargs
+    ) -> Any:
+        """Batch analysis for multiple prompts."""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            self._executor,
+            self._analyze_batch_sync,
+            prompts,
+            generation_kwargs
+        )
+
+    def _analyze_batch_sync(self, prompts: List[str], generation_kwargs: Dict[str, Any]) -> Any:
+        """Synchronous batch analysis (runs in thread pool)."""
+        self._ensure_pipeline()
+
+        if not isinstance(prompts, list):
+            return [self._analyze_sync(prompts, generation_kwargs)]
+
+        try:
+            if self.task_type == "text-classification":
+                return self._pipeline(prompts)
+
+            if self.task_type == "text-generation":
                 def _extract_text(output: Any) -> Optional[str]:
                     if isinstance(output, list) and output:
                         item = output[0]
@@ -291,11 +384,11 @@ class HFLocalProvider:
                         return output
                     return None
 
-                def _strip_prompt(text: Optional[str]) -> Optional[str]:
-                    if not text or not prompt:
+                def _strip_prompt(text: Optional[str], prompt_text: str) -> Optional[str]:
+                    if not text or not prompt_text:
                         return text
                     try:
-                        prompt_stripped = prompt.strip()
+                        prompt_stripped = prompt_text.strip()
                         text_stripped = text.strip()
                         if text_stripped.startswith(prompt_stripped):
                             remainder = text_stripped[len(prompt_stripped):].lstrip()
@@ -304,7 +397,6 @@ class HFLocalProvider:
                         return text
                     return text
 
-                # Merge default and provided kwargs
                 gen_kwargs = {
                     "max_new_tokens": 512,
                     "temperature": 0.1,
@@ -314,32 +406,26 @@ class HFLocalProvider:
                 gen_kwargs.update(self.generation_kwargs)
                 gen_kwargs.update(generation_kwargs)
 
-                # Some models echo the prompt even with return_full_text=False
-                result = self._pipeline(prompt, **gen_kwargs)
-                text = _strip_prompt(_extract_text(result))
+                result = self._pipeline(prompts, **gen_kwargs)
+                outputs = []
+                for prompt, output in zip(prompts, result):
+                    text = _strip_prompt(_extract_text(output), prompt)
+                    if text is None or not str(text).strip():
+                        fallback_kwargs = dict(gen_kwargs)
+                        min_new_tokens = fallback_kwargs.get("min_new_tokens")
+                        if not isinstance(min_new_tokens, int) or min_new_tokens <= 0:
+                            max_new = fallback_kwargs.get("max_new_tokens")
+                            fallback_kwargs["min_new_tokens"] = min(32, max_new) if isinstance(max_new, int) and max_new > 0 else 32
+                        fallback_output = self._pipeline(prompt, **fallback_kwargs)
+                        text = _strip_prompt(_extract_text(fallback_output), prompt)
+                    outputs.append(text if text is not None else output)
+                return outputs
 
-                # Retry once with min_new_tokens if we got an empty response
-                if text is None or not str(text).strip():
-                    fallback_kwargs = dict(gen_kwargs)
-                    min_new_tokens = fallback_kwargs.get("min_new_tokens")
-                    if not isinstance(min_new_tokens, int) or min_new_tokens <= 0:
-                        max_new = fallback_kwargs.get("max_new_tokens")
-                        fallback_kwargs["min_new_tokens"] = min(32, max_new) if isinstance(max_new, int) and max_new > 0 else 32
-                    result = self._pipeline(prompt, **fallback_kwargs)
-                    text = _strip_prompt(_extract_text(result))
-
-                return text if text is not None else result
-
-            else:
-                raise ValueError(f"Unsupported task type: {self.task_type}")
+            raise ValueError(f"Unsupported task type: {self.task_type}")
 
         except Exception as e:
-            logger.error(f"HF model inference failed: {e}")
+            logger.error(f"HF model batch inference failed: {e}")
             raise
-
-    def analyze_sync(self, prompt: str, **generation_kwargs) -> Any:
-        """Synchronous version of analyze."""
-        return self._analyze_sync(prompt, generation_kwargs)
 
     def close(self) -> None:
         """Release background executor resources."""

@@ -6,7 +6,7 @@ import json
 import logging
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from aegis.models.parser_factory import get_parser
 from aegis.models.provider_factory import ProviderCreationError, create_provider
@@ -26,7 +26,10 @@ class ModelRuntime:
         self.runtime_spec = resolve_runtime(self.settings)
         self.provider = create_provider(model)
         parser_cfg = self.settings.get("parser_config", {})
-        self.parser = get_parser(model.parser_id or "json_schema", parser_cfg)
+        parser_id = model.parser_id
+        if not parser_id and model.model_type == ModelType.TOOL_ML:
+            parser_id = "tool_result"
+        self.parser = get_parser(parser_id or "json_schema", parser_cfg)
         self.runners: Dict[ModelRole, Any] = {}
         self.keep_alive_seconds = self.runtime_spec.keep_alive_seconds
         self.last_used = time.time()
@@ -138,6 +141,53 @@ class ModelRuntime:
                 self._log_api_usage(prompt, result, scan_id, start_time)
 
             return result
+        finally:
+            self._semaphore.release()
+
+    async def run_batch(
+        self,
+        prompts: List[str],
+        contexts: List[Dict[str, Any]],
+        role: Optional[ModelRole] = None,
+        scan_id: Optional[str] = None,
+        **kwargs
+    ):
+        """Run a batch of prompts through the provider and parser."""
+        target_role = role or (self.model.roles[0] if self.model.roles else ModelRole.DEEP_SCAN)
+        target_role = self._normalize_role(target_role)
+        runner = self.get_runner(target_role)
+        self.touch()
+
+        # Rate limiting for cloud providers (batch counts as one call)
+        if self.rate_limiter:
+            provider_key = f"{self.model.provider_id}:{self.model.model_name}"
+            try:
+                await self.rate_limiter.acquire(provider_key, tokens=1.0, timeout=60.0)
+            except Exception as e:
+                logger.warning(f"Rate limit acquire failed: {e}")
+
+        await asyncio.to_thread(self._semaphore.acquire)
+        try:
+            # Track start time for cost calculation
+            start_time = time.time()
+
+            if hasattr(self.provider, "analyze_batch"):
+                raw_outputs = await self.provider.analyze_batch(prompts, contexts, **kwargs)
+                results = []
+                for raw_output, context, prompt in zip(raw_outputs, contexts, prompts):
+                    if isinstance(context, dict) and "prompt" not in context:
+                        context["prompt"] = prompt
+                    results.append(runner.parser.parse(raw_output, context))
+            else:
+                results = []
+                for prompt, context in zip(prompts, contexts):
+                    results.append(await runner.run(prompt, context, **kwargs))
+
+            # Cost tracking for cloud providers (best-effort)
+            if self.cost_tracker and hasattr(self.provider, "provider"):
+                self._log_api_usage(" ".join(prompts[:1]), results[-1] if results else None, scan_id, start_time)
+
+            return results
         finally:
             self._semaphore.release()
 

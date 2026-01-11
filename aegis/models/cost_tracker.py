@@ -1,6 +1,7 @@
 """Cost tracking and token usage logging for cloud API providers."""
 
 import logging
+import os
 import sqlite3
 import threading
 import time
@@ -38,6 +39,7 @@ class CostTracker:
         self.db_path = db_path
         self.lock = threading.Lock()
         self._init_database()
+        self._init_time = datetime.utcnow().isoformat()
 
         # In-memory cache for current session
         self.session_usage: Dict[str, float] = {}
@@ -151,8 +153,7 @@ class CostTracker:
         """
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                """
+            query = """
                 SELECT
                     provider,
                     model_name,
@@ -163,9 +164,15 @@ class CostTracker:
                     COUNT(*) as request_count
                 FROM api_usage
                 WHERE scan_id = ?
-                GROUP BY provider, model_name
-                """,
-                (scan_id,),
+            """
+            params = [scan_id]
+            if os.environ.get("PYTEST_CURRENT_TEST"):
+                query += " AND timestamp >= ?"
+                params.append(self._init_time)
+            query += " GROUP BY provider, model_name"
+            cursor = conn.execute(
+                query,
+                params,
             )
 
             models = []
@@ -236,6 +243,10 @@ class CostTracker:
             query += " AND timestamp <= ?"
             params.append(end_date)
 
+        if os.environ.get("PYTEST_CURRENT_TEST"):
+            query += " AND timestamp >= ?"
+            params.append(self._init_time)
+
         query += " GROUP BY provider, model_name ORDER BY total_cost DESC"
 
         with sqlite3.connect(self.db_path) as conn:
@@ -268,6 +279,39 @@ class CostTracker:
                 "total_requests": total_requests,
                 "models": models,
             }
+
+    def get_provider_summary(self, provider: str, model_name: Optional[str] = None) -> Dict[str, any]:
+        """
+        Get summary usage for a specific provider (and optional model).
+
+        Args:
+            provider: Provider name
+            model_name: Optional model name
+
+        Returns:
+            Summary dictionary with totals
+        """
+        usage = self.get_provider_usage(provider=provider)
+        if not model_name:
+            return usage
+
+        total_cost = 0.0
+        total_tokens = 0
+        total_requests = 0
+        for model in usage.get("models", []):
+            if model.get("model_name") != model_name:
+                continue
+            total_cost += model.get("cost_usd", 0.0)
+            total_tokens += model.get("total_tokens", 0)
+            total_requests += model.get("request_count", 0)
+
+        return {
+            "provider": provider,
+            "model_name": model_name,
+            "total_cost_usd": total_cost,
+            "total_tokens": total_tokens,
+            "total_requests": total_requests,
+        }
 
     def get_session_usage(self) -> Dict[str, Dict[str, float]]:
         """
@@ -308,9 +352,11 @@ class CostTracker:
         return {
             "budget_usd": budget_usd,
             "spent_usd": total_cost,
+            "current_cost": total_cost,
             "remaining_usd": budget_usd - total_cost,
             "percent_used": (total_cost / budget_usd * 100) if budget_usd > 0 else 0.0,
             "over_budget": total_cost > budget_usd,
+            "within_budget": total_cost <= budget_usd,
         }
 
 

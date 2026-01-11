@@ -294,6 +294,11 @@
     color: #f85149;
   }
 
+  .status-badge.cancelled {
+    background-color: rgba(210, 153, 34, 0.2);
+    color: #d29922;
+  }
+
   .control-buttons {
     display: flex;
     gap: 0.5rem;
@@ -446,6 +451,8 @@
     let findingsCount = 0;
     let steps = {};
     let models = {};
+    let statusPollTimer = null;
+    let terminalStatus = null;
 
     function updateLocalStatus(status) {
       try {
@@ -453,6 +460,44 @@
         localStorage.setItem("aegis_last_scan_status", status);
       } catch (e) {
         // Ignore storage errors
+      }
+    }
+
+    function startStatusPolling() {
+      if (statusPollTimer) {
+        return;
+      }
+      statusPollTimer = setInterval(checkStatus, 10000);
+      checkStatus();
+    }
+
+    function stopStatusPolling() {
+      if (statusPollTimer) {
+        clearInterval(statusPollTimer);
+        statusPollTimer = null;
+      }
+    }
+
+    async function checkStatus() {
+      if (terminalStatus) {
+        return;
+      }
+      try {
+        const response = await fetch(`/api/scan/${scanId}/status`, { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        const data = await response.json();
+        const status = data && data.status;
+        if (status === "completed") {
+          onCompleted({});
+        } else if (status === "failed") {
+          onError("Scan failed");
+        } else if (status === "cancelled") {
+          onCancelled("Scan cancelled");
+        }
+      } catch (error) {
+        // Ignore polling errors to avoid noisy UI
       }
     }
 
@@ -481,6 +526,8 @@
         logMessage('Connection error, retrying...', 'error');
         // EventSource will auto-reconnect
       };
+
+      startStatusPolling();
     }
 
     // Event Handlers
@@ -616,7 +663,27 @@
 
     function handleCompleted(e) {
       const data = JSON.parse(e.data);
-      const totalFindings = data.total_findings || 0;
+      onCompleted(data);
+    }
+
+    function handleError(e) {
+      const data = JSON.parse(e.data);
+      const error = data.error || 'Unknown error';
+      onError(error);
+    }
+
+    function handleCancelled(e) {
+      const data = JSON.parse(e.data);
+      const message = data.message || 'Scan cancelled';
+      onCancelled(message);
+    }
+
+    function onCompleted(data) {
+      if (terminalStatus) {
+        return;
+      }
+      terminalStatus = "completed";
+      const totalFindings = data.total_findings || findingsCount || 0;
       const duration = data.duration_ms || 0;
 
       updateProgressBar(100, 'Completed');
@@ -629,12 +696,16 @@
         window.location.href = `/scan/${scanId}`;
       };
 
+      // Hide cancel button
+      document.getElementById('cancelScanBtn').style.display = 'none';
+
       // Close SSE connection
       if (eventSource) {
         eventSource.close();
       }
 
       updateLocalStatus("completed");
+      stopStatusPolling();
 
       // Auto-redirect to results after 2 seconds
       logMessage('Redirecting to results...', 'info');
@@ -643,10 +714,11 @@
       }, 2000);
     }
 
-    function handleError(e) {
-      const data = JSON.parse(e.data);
-      const error = data.error || 'Unknown error';
-
+    function onError(error) {
+      if (terminalStatus) {
+        return;
+      }
+      terminalStatus = "failed";
       updateStatusBadge('failed', 'Failed');
       logMessage(`Error: ${error}`, 'error');
 
@@ -658,12 +730,14 @@
         eventSource.close();
       }
       updateLocalStatus("failed");
+      stopStatusPolling();
     }
 
-    function handleCancelled(e) {
-      const data = JSON.parse(e.data);
-      const message = data.message || 'Scan cancelled';
-
+    function onCancelled(message) {
+      if (terminalStatus) {
+        return;
+      }
+      terminalStatus = "cancelled";
       updateProgressBar(100, 'Cancelled');
       updateStatusBadge('cancelled', 'Cancelled');
       logMessage(`Scan cancelled: ${message}`, 'warning');
@@ -676,6 +750,7 @@
         eventSource.close();
       }
       updateLocalStatus("cancelled");
+      stopStatusPolling();
     }
 
     // UI Update Functions
@@ -706,6 +781,8 @@
         badge.innerHTML = '<i class="bi bi-check-circle"></i> ' + text;
       } else if (status === 'failed') {
         badge.innerHTML = '<i class="bi bi-x-circle"></i> ' + text;
+      } else if (status === 'cancelled') {
+        badge.innerHTML = '<i class="bi bi-slash-circle"></i> ' + text;
       }
     }
 
@@ -752,7 +829,7 @@
       if (step.status === 'running') {
         return `<span class="text-primary">Running...</span>`;
       } else if (step.status === 'completed') {
-        return `${step.kind} • ${step.findingsCount || 0} findings • ${step.duration || 0}ms`;
+        return `${step.kind} | ${step.findingsCount || 0} findings | ${step.duration || 0}ms`;
       } else if (step.status === 'skipped') {
         return `<span class="text-muted">Skipped</span>`;
       } else if (step.status === 'failed') {
@@ -895,3 +972,4 @@
   })();
 </script>
 {% endblock %}
+

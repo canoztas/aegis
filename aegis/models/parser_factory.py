@@ -9,6 +9,7 @@ from aegis.models.parsers import (
     JSONSchemaParser,
     HFTextClassificationParser,
     FallbackParser,
+    ToolResultParser,
 )
 
 # Built-in parser registry
@@ -17,6 +18,7 @@ _PARSER_CLASSES: Dict[str, Type[BaseParser]] = {
     "json_findings": JSONFindingsParser,
     "hf_classification": HFTextClassificationParser,
     "fallback": FallbackParser,
+    "tool_result": ToolResultParser,
 }
 
 

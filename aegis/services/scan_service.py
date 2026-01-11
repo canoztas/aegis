@@ -2,7 +2,8 @@
 
 from dataclasses import dataclass
 import threading
-from typing import Dict, List, Callable, Any, Optional
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Callable, Any, Optional, Iterable
 
 from aegis.consensus.engine import ConsensusEngine
 from aegis.data_models import ScanResult, ModelResponse, Finding
@@ -36,6 +37,14 @@ class ScanService:
     def _is_cancelled(self, scan_id: str) -> bool:
         event = self.scan_state.cancel_events.get(scan_id)
         return bool(event and event.is_set())
+
+    def _chunk_batches(self, chunks: List[Dict[str, Any]], batch_size: int) -> Iterable[List[Dict[str, Any]]]:
+        if batch_size <= 1:
+            for chunk in chunks:
+                yield [chunk]
+            return
+        for i in range(0, len(chunks), batch_size):
+            yield chunks[i:i + batch_size]
 
     def run_background(
         self,
@@ -84,19 +93,49 @@ class ScanService:
                         continue
 
                     per_model_findings[model_id] = []
+                    settings = model.settings or {}
+                    runtime_cfg = settings.get("runtime", {})
+                    batch_size = int(settings.get("batch_size") or 1)
+                    max_workers = int(settings.get("chunk_workers") or runtime_cfg.get("max_concurrency") or 1)
+                    max_workers = max(1, max_workers)
+
                     for file_path, content in source_files.items():
+                        chunks: List[Dict[str, Any]] = []
                         for chunk_content, line_start, line_end in chunk_file_lines(content, chunk_size):
-                            findings = engine.run_model_to_findings(
-                                model=model,
-                                code=chunk_content,
-                                file_path=file_path,
-                                role=model.roles[0] if model.roles else None,
-                                line_start=line_start,
-                                line_end=line_end,
-                            )
-                            per_model_findings[model_id].extend(findings)
-                            for finding in findings:
-                                emitter.finding_emitted(finding.to_dict(), model_id)
+                            chunks.append({
+                                "code": chunk_content,
+                                "file_path": file_path,
+                                "line_start": line_start,
+                                "line_end": line_end,
+                                "snippet": chunk_content,
+                            })
+
+                        if not chunks:
+                            continue
+
+                        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                            batches = list(self._chunk_batches(chunks, batch_size))
+                            futures = [
+                                executor.submit(
+                                    engine.run_model_batch_to_findings,
+                                    model,
+                                    batch,
+                                    model.roles[0] if model.roles else None,
+                                )
+                                for batch in batches
+                            ]
+
+                            for future, batch in zip(futures, batches):
+                                try:
+                                    batch_findings = future.result()
+                                except Exception as e:
+                                    emitter.warning(f"Batch failed for model {model_id}: {e}", {"model_id": model_id})
+                                    continue
+
+                                for chunk_findings in batch_findings:
+                                    per_model_findings[model_id].extend(chunk_findings)
+                                    for finding in chunk_findings:
+                                        emitter.finding_emitted(finding.to_dict(), model_id)
 
                     model_responses.append(
                         ModelResponse(

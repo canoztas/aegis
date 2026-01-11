@@ -88,11 +88,74 @@ In Models:
 - REGISTERED shows all registered models and lets you edit settings.
 - DISCOVER_OLLAMA pulls local Ollama models.
 - HUGGING_FACE shows presets and registers them with one click.
+- CLOUD models are added through the registry and show up under REGISTERED.
 
 Editable settings:
 - Runtime: device, device_map, dtype, quantization, max concurrency, keep-alive.
 - Generation: max_new_tokens, min_new_tokens, temperature, top_p, do_sample.
 - Provider: HF adapter/base model, Ollama options, prompt template.
+
+### Cloud Models (API keys + registration)
+
+Cloud models are registered just like any other model and are managed from the Models page.
+Store API keys in the model settings (`settings.api_key`) or set environment variables:
+
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `GOOGLE_API_KEY`
+
+Example: OpenAI cloud model
+
+```bash
+curl -X POST http://localhost:5000/api/models/registry \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_type": "openai_cloud",
+    "provider_id": "openai",
+    "model_name": "gpt-4o-mini",
+    "display_name": "OpenAI GPT-4o mini",
+    "roles": ["deep_scan"],
+    "parser_id": "json_schema",
+    "settings": {
+      "api_key": "YOUR_KEY",
+      "max_tokens": 2048,
+      "temperature": 0.1
+    }
+  }'
+```
+
+Example: OpenAI-compatible endpoint
+
+```bash
+curl -X POST http://localhost:5000/api/models/registry \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_type": "openai_compatible",
+    "provider_id": "openai",
+    "model_name": "local-gpt",
+    "display_name": "Local OpenAI-Compatible",
+    "roles": ["deep_scan"],
+    "parser_id": "json_schema",
+    "settings": {
+      "base_url": "http://localhost:8000/v1",
+      "api_key": "YOUR_KEY"
+    }
+  }'
+```
+
+### Test a Model
+
+Use `/api/models/test` to verify a registered model responds.
+
+```bash
+curl -X POST http://localhost:5000/api/models/test \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_id": "hf:codeastra_7b",
+    "prompt": "def add(a, b): return a + b",
+    "file_path": "sample.py"
+  }'
+```
 
 ## Adding a New Hugging Face Model
 

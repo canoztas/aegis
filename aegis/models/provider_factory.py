@@ -9,6 +9,7 @@ from aegis.connectors.openai_connector import OpenAIConnector
 from aegis.models.schema import ModelRecord, ModelType
 from aegis.models.runtime import RuntimeConfigError, resolve_runtime
 from aegis.providers.hf_local import HFLocalProvider
+from aegis.providers.tool_provider import ToolProvider
 
 
 class ProviderCreationError(RuntimeError):
@@ -183,6 +184,14 @@ def create_provider(model: ModelRecord) -> Any:
             provider_type=model.provider_id or "openai",
         )
         return OpenAICompatibleProvider(connector, model.model_name, settings)
+
+    if model.model_type == ModelType.TOOL_ML:
+        tool_id = settings.get("tool_id") or model.model_name
+        tool_config = settings.get("tool_config") or {}
+        try:
+            return ToolProvider(tool_id=tool_id, tool_config=tool_config)
+        except Exception as exc:
+            raise ProviderCreationError(str(exc))
 
     # Cloud providers (OpenAI, Anthropic, Google)
     if model.model_type == ModelType.OPENAI_CLOUD:

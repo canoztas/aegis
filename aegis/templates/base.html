@@ -17,6 +17,10 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap"
     rel="stylesheet">
 
+  <!-- Monaco Editor -->
+  <link rel="stylesheet" data-name="vs/editor/editor.main"
+    href="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.min.css">
+
   <!-- Custom CSS -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
@@ -58,12 +62,6 @@
               HISTORY
             </a>
           </li>
-          <li class="nav-item">
-            <a class="nav-link px-4 {% if request.endpoint == 'main.settings_page' %}active text-primary{% endif %}"
-              href="{{ url_for('main.settings_page') }}">
-              SETTINGS
-            </a>
-          </li>
         </ul>
       </div>
     </div>
@@ -88,7 +86,23 @@
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="mt-auto py-3 border-top border-subtle bg-panel">
+  <!-- Neural Link Footprint -->
+  <div id="neural-link-bar" class="fixed-bottom border-top border-subtle bg-black text-monospace"
+    style="z-index: 1030; height: 32px; font-size: 0.75rem;">
+    <div class="container-fluid px-2 h-100 d-flex align-items-center justify-content-between">
+      <div class="d-flex align-items-center gap-3 overflow-hidden" style="flex: 1;">
+        <span class="text-secondary opacity-50"><i class="bi bi-broadcast me-1"></i>NEURAL_LINK://</span>
+        <div id="neural-feed" class="text-primary text-truncate blink-cursor">initializing uplink...</div>
+      </div>
+      <div class="d-flex align-items-center gap-3 ps-3 border-start border-white border-opacity-10">
+        <span class="text-muted">SYS_LOAD: <span id="sys-load-value" class="text-light">12%</span></span>
+        <span class="text-muted">VRAM: <span id="sys-vram-value" class="text-light">4.2GB</span></span>
+        <span class="text-success"><i class="bi bi-circle-fill" style="font-size: 0.5rem;"></i> ONLINE</span>
+      </div>
+    </div>
+  </div>
+
+  <footer class="mt-auto py-3 border-top border-subtle bg-panel mb-4 pb-4"> <!-- Added bottom margin for Neural Link -->
     <div class="container-fluid px-4 d-flex justify-content-between align-items-center text-muted small"
       style="max-width: 1600px;">
       <span class="font-monospace">&copy; 2025 AEGIS OF THE VULNERABLE</span>
@@ -99,6 +113,44 @@
   {% block modals %}{% endblock %}
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Monaco -->
+  <script>var require = { paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } };</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.nls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/editor/editor.main.js"></script>
+
+  <!-- Neural Link Script -->
+  <script>
+    // Simple Neural Link Simulation
+    document.addEventListener('DOMContentLoaded', () => {
+      const feed = document.getElementById('neural-feed');
+      const loadVal = document.getElementById('sys-load-value');
+      const vramVal = document.getElementById('sys-vram-value');
+
+      const messages = [
+        "Monitoring subprocess 82a...",
+        "Analyzing localized threat vectors...",
+        "System integrity verification: 100%",
+        "Scanning memory buffer [0x004F2A]...",
+        "Awaiting operator input...",
+        "CodeAstra idle. Ready for instruction.",
+        "DeepSeek inference engine standby.",
+        "Network traffic normal.",
+        "Parsing AST for syntax anomalies..."
+      ];
+
+      setInterval(() => {
+        if (Math.random() > 0.7) {
+          feed.textContent = messages[Math.floor(Math.random() * messages.length)];
+        }
+        // Simulate stats
+        if (Math.random() > 0.5) {
+          loadVal.textContent = Math.floor(Math.random() * 30 + 10) + "%";
+          vramVal.textContent = (Math.random() * 2 + 3).toFixed(1) + "GB";
+        }
+      }, 2000);
+    });
+  </script>
 
   <style>
     .nav-link {
@@ -117,10 +169,22 @@
 
     .nav-link.active {
       color: var(--brand-primary);
+      text-shadow: 0 0 5px var(--brand-glow);
     }
 
     .navbar-toggler-icon {
       filter: invert(1);
+    }
+
+    .blink-cursor::after {
+      content: '_';
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      50% {
+        opacity: 0;
+      }
     }
   </style>
 
