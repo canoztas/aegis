@@ -19,7 +19,7 @@ from aegis.pipeline.schema import (
     PipelineExecutionContext,
 )
 from aegis.models.registry import ModelRegistryV2
-from aegis.models.schema import ModelRole, FindingCandidate, ParserResult
+from aegis.models.schema import ModelRole, ModelType, FindingCandidate, ParserResult
 from aegis.prompt_builder import PromptBuilder
 from aegis.consensus.engine import ConsensusEngine
 from aegis.data_models import ModelResponse, Finding
@@ -367,6 +367,35 @@ class PipelineExecutor:
 
         collected: List[Finding] = []
 
+        # Emit model_started event with telemetry (only once per model)
+        model_start_time = time.time()
+        try:
+            runtime = self.execution_engine.runtime_manager.get_runtime(model)
+            telemetry = runtime.telemetry or {}
+
+            # Determine model type for display
+            model_type = "unknown"
+            if model.model_type.value.startswith("hf_"):
+                model_type = "hf_local"
+            elif "_cloud" in model.model_type.value:
+                model_type = model.model_type.value.replace("_cloud", "_api")
+            elif model.model_type == "tool_ml":
+                model_type = "tool"
+
+            emitter.model_started(
+                model_id=model.model_id,
+                model_name=model.model_name,
+                model_type=model_type,
+                device=telemetry.get("device"),
+                vram_mb=telemetry.get("vram_mb", 0),
+                load_time_ms=telemetry.get("load_time_ms", 0),
+                quantization=telemetry.get("quantization"),
+                precision=telemetry.get("precision"),
+            )
+        except Exception as e:
+            # Don't fail if telemetry fails
+            pass
+
         for file_path, content in source_files.items():
             chunks: List[Dict[str, Any]] = []
             for chunk_content, line_start, line_end in chunk_file_lines(content, chunk_size):
@@ -404,6 +433,23 @@ class PipelineExecutor:
                         collected.extend(chunk_findings)
                         for finding in chunk_findings:
                             emitter.finding_emitted(finding.to_dict(), step_id)
+
+        # Emit model_completed event with metrics
+        model_latency_ms = int((time.time() - model_start_time) * 1000)
+        try:
+            # TODO: For now, we don't have token tracking for HF models
+            # This will be implemented when we add tokenizer-based tracking
+            emitter.model_completed(
+                model_id=model.model_id,
+                findings_count=len(collected),
+                latency_ms=model_latency_ms,
+                input_tokens=0,  # TODO: Track input tokens
+                output_tokens=0,  # TODO: Track output tokens
+                tokens_per_sec=0.0,  # TODO: Calculate tokens/sec
+            )
+        except Exception as e:
+            # Don't fail if event emission fails
+            pass
 
         return collected
 

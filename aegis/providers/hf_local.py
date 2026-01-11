@@ -427,6 +427,71 @@ class HFLocalProvider:
             logger.error(f"HF model batch inference failed: {e}")
             raise
 
+    def get_telemetry(self) -> Dict[str, Any]:
+        """
+        Get model telemetry information.
+
+        Returns:
+            Dictionary with device, VRAM, quantization, precision, etc.
+        """
+        telemetry = {
+            "device": self.device,
+            "vram_mb": 0,
+            "quantization": None,
+            "precision": None,
+            "load_time_ms": 0,
+        }
+
+        try:
+            # Get actual device from pipeline if loaded
+            if self._pipeline and hasattr(self._pipeline, "device"):
+                device = self._pipeline.device
+                telemetry["device"] = str(device)
+            elif self._pipeline and hasattr(self._pipeline, "model"):
+                model = self._pipeline.model
+                if hasattr(model, "device"):
+                    telemetry["device"] = str(model.device)
+
+            # Get VRAM usage if CUDA available
+            if _torch and _torch_cuda_available and "cuda" in str(telemetry["device"]):
+                try:
+                    if self._pipeline and hasattr(self._pipeline, "model"):
+                        model = self._pipeline.model
+                        # Get memory allocated to this model
+                        if hasattr(_torch, "cuda"):
+                            # Get current allocated memory
+                            allocated_mb = _torch.cuda.memory_allocated() / (1024 * 1024)
+                            telemetry["vram_mb"] = int(allocated_mb)
+                except Exception as e:
+                    logger.debug(f"Failed to get VRAM usage: {e}")
+
+            # Detect quantization from kwargs
+            if self.kwargs:
+                if self.kwargs.get("load_in_4bit"):
+                    telemetry["quantization"] = "int4"
+                elif self.kwargs.get("load_in_8bit"):
+                    telemetry["quantization"] = "int8"
+                elif self.kwargs.get("quantization_config"):
+                    telemetry["quantization"] = "quantized"
+
+                # Detect precision from torch_dtype
+                torch_dtype = self.kwargs.get("torch_dtype")
+                if torch_dtype:
+                    if _torch:
+                        if torch_dtype == _torch.bfloat16:
+                            telemetry["precision"] = "bfloat16"
+                        elif torch_dtype == _torch.float16:
+                            telemetry["precision"] = "float16"
+                        elif torch_dtype == _torch.float32:
+                            telemetry["precision"] = "float32"
+                    elif isinstance(torch_dtype, str):
+                        telemetry["precision"] = torch_dtype.lower()
+
+        except Exception as e:
+            logger.debug(f"Error collecting telemetry: {e}")
+
+        return telemetry
+
     def close(self) -> None:
         """Release background executor resources."""
         if hasattr(self, "_executor"):

@@ -24,7 +24,21 @@ class ModelRuntime:
         self.model = model
         self.settings = model.settings or {}
         self.runtime_spec = resolve_runtime(self.settings)
+
+        # Track provider load time for telemetry
+        provider_load_start = time.time()
         self.provider = create_provider(model)
+        self.provider_load_time_ms = int((time.time() - provider_load_start) * 1000)
+
+        # Collect provider telemetry if available (for HF models)
+        self.telemetry = {}
+        if hasattr(self.provider, 'get_telemetry'):
+            try:
+                self.telemetry = self.provider.get_telemetry()
+                self.telemetry["load_time_ms"] = self.provider_load_time_ms
+            except Exception as e:
+                logger.warning(f"Failed to collect provider telemetry: {e}")
+
         parser_cfg = self.settings.get("parser_config", {})
         parser_id = model.parser_id
         if not parser_id and model.model_type == ModelType.TOOL_ML:
