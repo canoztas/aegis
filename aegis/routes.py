@@ -18,7 +18,7 @@ from flask import (
 from werkzeug.utils import secure_filename
 from werkzeug.datastructures import FileStorage
 
-from aegis.utils import allowed_file, extract_source_files
+from aegis.utils import allowed_file, extract_source_files, debug_scan_log
 from aegis.exports import export_sarif, export_csv
 from aegis.data_models import ScanResult, Finding
 from aegis.models.registry import ModelRegistryV2 as NewModelRegistry
@@ -152,9 +152,15 @@ def create_scan() -> Any:
         filename = secure_filename(file.filename)
         filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
         file.save(filepath)
+        try:
+            file_size = os.path.getsize(filepath)
+        except OSError:
+            file_size = None
+        debug_scan_log(f"[scan-debug] upload saved: {filepath} size={file_size}")
 
         # Extract source files
         source_files = extract_source_files(filepath)
+        debug_scan_log(f"[scan-debug] source files extracted: {len(source_files)}")
 
         # Validate selected models against new registry
         registry = NewModelRegistry()
@@ -167,6 +173,7 @@ def create_scan() -> Any:
             if filepath and os.path.exists(filepath):
                 os.remove(filepath)
             return jsonify({"error": "No valid models selected"}), 400
+        debug_scan_log(f"[scan-debug] valid models: {valid_model_ids}")
 
         # Generate scan ID
         scan_id = str(uuid.uuid4())
@@ -221,7 +228,9 @@ def create_scan() -> Any:
             source_files=source_files,
             model_ids=valid_model_ids,
             consensus_strategy=consensus_strategy,
+            judge_model_id=judge_model_id,
         ))
+        debug_scan_log(f"[scan-debug] scan enqueued: {scan_id}")
 
         # Clean up uploaded file
         if filepath and os.path.exists(filepath):
@@ -235,6 +244,7 @@ def create_scan() -> Any:
         })
 
     except Exception as e:
+        debug_scan_log(f"[scan-debug] scan create failed: {e}")
         if filepath and os.path.exists(filepath):
             os.remove(filepath)
         return jsonify({"error": str(e)}), 500
@@ -245,17 +255,27 @@ def get_scan_status(scan_id: str) -> Any:
     """Get scan status."""
     status = _scan_status.get(scan_id)
     
-    if not status and _use_v2:
+    started_at = None
+    if status == "running" and scan_id in _scan_results:
+         # Try to get start time from in-memory results if available (unlikely for running)
+         pass
+
+    if _use_v2:
         # Fallback to database
         scan_repo, _ = get_v2_repositories()
         try:
             scan_data = scan_repo.get_by_scan_id(scan_id)
             if scan_data:
                 status = scan_data.get("status")
+                started_at = scan_data.get("started_at")
         except Exception:
             pass
 
-    return jsonify({"scan_id": scan_id, "status": status or "unknown"})
+    return jsonify({
+        "scan_id": scan_id, 
+        "status": status or "unknown",
+        "started_at": started_at
+    })
 
 
 @main_bp.route("/api/scan/<scan_id>/cancel", methods=["POST"])
@@ -344,6 +364,7 @@ def retry_scan(scan_id: str) -> Any:
             # Get pipeline config
             pipeline_config = scan_data.get("pipeline_config", {})
             consensus_strategy = pipeline_config.get("consensus_strategy", "union")
+            judge_model_id = pipeline_config.get("judge_model_id")
 
             # Create new scan with same configuration
             new_scan_id = str(uuid.uuid4())
@@ -398,6 +419,7 @@ def retry_scan(scan_id: str) -> Any:
                 source_files=source_files,
                 model_ids=model_ids,
                 consensus_strategy=consensus_strategy,
+                judge_model_id=judge_model_id,
             ))
 
             return jsonify({
@@ -575,12 +597,14 @@ def stream_scan_progress(scan_id: str) -> Any:
     - cancelled: Scan cancelled
     """
     from aegis.sse.stream import SSEManager, format_sse_message, format_keepalive
+    from aegis.events import get_event_bus  # Import EventBus
 
     # Get or create SSE manager instance
     if not hasattr(current_app, 'sse_manager'):
         current_app.sse_manager = SSEManager()
 
     sse_manager = current_app.sse_manager
+    event_bus = get_event_bus()  # Get event bus instance
 
     # Connect client
     connection = sse_manager.connect(scan_id=scan_id)
@@ -588,6 +612,18 @@ def stream_scan_progress(scan_id: str) -> Any:
     def event_stream():
         """Generate SSE events."""
         try:
+            # 1. Replay history first
+            history = event_bus.get_history(scan_id=scan_id)
+            for event in history:
+                # Map event type to SSE event name
+                sse_event_type = event_bus._map_event_to_sse(event.type)
+                msg = format_sse_message(
+                    event_type=sse_event_type,
+                    data=event.data
+                )
+                yield msg
+
+            # 2. Stream new events
             while True:
                 # Get events from queue (with timeout for keepalive)
                 events = connection.get_events(timeout=15.0)

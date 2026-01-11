@@ -107,6 +107,7 @@ class HFLocalProvider:
         self._pipeline = None
         self._model = None
         self._tokenizer = None
+        self._force_manual_generate = bool(adapter_id)
         worker_count = 1
         try:
             if max_workers is not None:
@@ -158,6 +159,14 @@ class HFLocalProvider:
                 if not _accelerate_available and "device_map" in safe_kwargs:
                     logger.warning("Accelerate not installed; removing device_map to avoid load failure.")
                     safe_kwargs.pop("device_map", None)
+
+                if str(self.device).startswith("cpu"):
+                    if safe_kwargs.pop("load_in_4bit", None) is not None:
+                        logger.warning("CPU runtime detected; removed load_in_4bit.")
+                    if safe_kwargs.pop("load_in_8bit", None) is not None:
+                        logger.warning("CPU runtime detected; removed load_in_8bit.")
+                    if safe_kwargs.pop("quantization_config", None) is not None:
+                        logger.warning("CPU runtime detected; removed quantization_config.")
 
                 # Strip quantization flags if bitsandbytes missing
                 if not _bitsandbytes_available:
@@ -283,9 +292,16 @@ class HFLocalProvider:
 
         try:
             inputs = self._tokenizer(prompt, return_tensors="pt")
-            if not getattr(self._model, "hf_device_map", None) and hasattr(self._model, "device"):
-                device = self._model.device
-                inputs = {k: v.to(device) for k, v in inputs.items()}
+            target_device = None
+            if hasattr(self._model, "device"):
+                target_device = self._model.device
+            try:
+                param_device = next(self._model.parameters()).device
+                target_device = param_device or target_device
+            except Exception:
+                pass
+            if target_device is not None:
+                inputs = {k: v.to(target_device) for k, v in inputs.items()}
 
             safe_kwargs = dict(gen_kwargs)
             for key in ("return_full_text", "return_text", "clean_up_tokenization_spaces"):
@@ -295,16 +311,70 @@ class HFLocalProvider:
                 safe_kwargs.setdefault("eos_token_id", self._tokenizer.eos_token_id)
                 safe_kwargs.setdefault("pad_token_id", self._tokenizer.eos_token_id)
 
+            if "max_new_tokens" not in safe_kwargs or safe_kwargs["max_new_tokens"] is None:
+                safe_kwargs["max_new_tokens"] = 256
+
             with _torch.inference_mode():
                 output_ids = self._model.generate(**inputs, **safe_kwargs)
 
             input_len = inputs["input_ids"].shape[-1]
             generated = output_ids[0][input_len:]
             text = self._tokenizer.decode(generated, skip_special_tokens=True)
+            if not text.strip():
+                text = self._tokenizer.decode(output_ids[0], skip_special_tokens=True)
             return text
         except Exception as e:
             logger.warning("Manual generate fallback failed: %s", e)
             return None
+
+    @staticmethod
+    def _looks_like_json(text: Optional[str]) -> bool:
+        if not text or not isinstance(text, str):
+            return False
+        stripped = text.strip()
+        if not stripped:
+            return False
+        return "{" in stripped and "}" in stripped
+
+    @staticmethod
+    def _json_retry_prompt(prompt: str) -> str:
+        suffix = (
+            "\n\nReturn ONLY valid JSON now. The output must start with '{' and end with '}'.\n"
+            "If there are no findings, return {\"findings\": []}."
+        )
+        return f"{prompt.rstrip()}{suffix}"
+
+    def _extract_generated_text(self, output: Any, prompt: str) -> Optional[str]:
+        """Extract text from HF outputs and avoid over-stripping."""
+        def _extract_text(result: Any) -> Optional[str]:
+            if isinstance(result, list) and result:
+                item = result[0]
+                if isinstance(item, dict):
+                    if "generated_text" in item:
+                        return item.get("generated_text")
+                    if "text" in item:
+                        return item.get("text")
+                if isinstance(item, str):
+                    return item
+            if isinstance(result, dict):
+                return result.get("generated_text") or result.get("text")
+            if isinstance(result, str):
+                return result
+            return None
+
+        text = _extract_text(output)
+        if not text:
+            return text
+
+        prompt_stripped = prompt.strip()
+        text_stripped = text.strip()
+        if text_stripped == prompt_stripped:
+            return text
+        if text_stripped.startswith(prompt_stripped):
+            remainder = text_stripped[len(prompt_stripped):].lstrip()
+            if remainder:
+                return remainder
+        return text
 
     async def analyze(
         self,
@@ -336,35 +406,6 @@ class HFLocalProvider:
         """Synchronous analysis (runs in thread pool)."""
         self._ensure_pipeline()
 
-        def _extract_text(output: Any) -> Optional[str]:
-            if isinstance(output, list) and output:
-                item = output[0]
-                if isinstance(item, dict):
-                    if "generated_text" in item:
-                        return item.get("generated_text")
-                    if "text" in item:
-                        return item.get("text")
-                if isinstance(item, str):
-                    return item
-            if isinstance(output, dict):
-                return output.get("generated_text") or output.get("text")
-            if isinstance(output, str):
-                return output
-            return None
-
-        def _strip_prompt(text: Optional[str], prompt_text: str) -> Optional[str]:
-            if not text or not prompt_text:
-                return text
-            try:
-                prompt_stripped = prompt_text.strip()
-                text_stripped = text.strip()
-                if text_stripped.startswith(prompt_stripped):
-                    remainder = text_stripped[len(prompt_stripped):].lstrip()
-                    return remainder
-            except Exception:
-                return text
-            return text
-
         try:
             if self.task_type == "text-classification":
                 # Classification returns list of label/score dicts
@@ -375,9 +416,26 @@ class HFLocalProvider:
                 # Merge default and provided kwargs
                 gen_kwargs = self._normalize_generation_kwargs(generation_kwargs)
 
+                if self._force_manual_generate:
+                    text = self._manual_generate(prompt, gen_kwargs)
+                    if text is None or not str(text).strip() or not self._looks_like_json(text):
+                        strict_kwargs = dict(gen_kwargs)
+                        strict_kwargs["do_sample"] = False
+                        strict_kwargs["temperature"] = 0.0
+                        strict_kwargs.pop("top_p", None)
+                        retry_text = self._manual_generate(prompt, strict_kwargs)
+                        if retry_text and str(retry_text).strip():
+                            text = retry_text
+                        if text is None or not str(text).strip() or not self._looks_like_json(text):
+                            repair_prompt = self._json_retry_prompt(prompt)
+                            repair_text = self._manual_generate(repair_prompt, strict_kwargs)
+                            if repair_text and str(repair_text).strip():
+                                text = repair_text
+                    return text if text is not None else ""
+
                 # Some models echo the prompt even with return_full_text=False
                 result = self._pipeline(prompt, **gen_kwargs)
-                text = _strip_prompt(_extract_text(result), prompt)
+                text = self._extract_generated_text(result, prompt)
 
                 # Retry once with min_new_tokens if we got an empty response
                 if text is None or not str(text).strip():
@@ -387,12 +445,21 @@ class HFLocalProvider:
                         max_new = fallback_kwargs.get("max_new_tokens")
                         fallback_kwargs["min_new_tokens"] = min(32, max_new) if isinstance(max_new, int) and max_new > 0 else 32
                     result = self._pipeline(prompt, **fallback_kwargs)
-                    text = _strip_prompt(_extract_text(result), prompt)
+                    text = self._extract_generated_text(result, prompt)
 
-                if text is None or not str(text).strip():
+                if text is None or not str(text).strip() or not self._looks_like_json(text):
                     manual = self._manual_generate(prompt, gen_kwargs)
                     if manual and str(manual).strip():
                         text = manual
+                    if text is None or not str(text).strip() or not self._looks_like_json(text):
+                        repair_prompt = self._json_retry_prompt(prompt)
+                        strict_kwargs = dict(gen_kwargs)
+                        strict_kwargs["do_sample"] = False
+                        strict_kwargs["temperature"] = 0.0
+                        strict_kwargs.pop("top_p", None)
+                        manual = self._manual_generate(repair_prompt, strict_kwargs)
+                        if manual and str(manual).strip():
+                            text = manual
 
                 return text if text is not None else result
 
@@ -431,44 +498,46 @@ class HFLocalProvider:
 
         try:
             if self.task_type == "text-classification":
-                return self._pipeline(prompts)
+                outputs = self._pipeline(prompts)
+                if isinstance(outputs, dict):
+                    return [[outputs]]
+                if isinstance(outputs, list):
+                    normalized = []
+                    for item in outputs:
+                        if isinstance(item, dict):
+                            normalized.append([item])
+                        else:
+                            normalized.append(item)
+                    return normalized
+                return outputs
 
             if self.task_type == "text-generation":
-                def _extract_text(output: Any) -> Optional[str]:
-                    if isinstance(output, list) and output:
-                        item = output[0]
-                        if isinstance(item, dict):
-                            if "generated_text" in item:
-                                return item.get("generated_text")
-                            if "text" in item:
-                                return item.get("text")
-                        if isinstance(item, str):
-                            return item
-                    if isinstance(output, dict):
-                        return output.get("generated_text") or output.get("text")
-                    if isinstance(output, str):
-                        return output
-                    return None
-
-                def _strip_prompt(text: Optional[str], prompt_text: str) -> Optional[str]:
-                    if not text or not prompt_text:
-                        return text
-                    try:
-                        prompt_stripped = prompt_text.strip()
-                        text_stripped = text.strip()
-                        if text_stripped.startswith(prompt_stripped):
-                            remainder = text_stripped[len(prompt_stripped):].lstrip()
-                            return remainder
-                    except Exception:
-                        return text
-                    return text
-
                 gen_kwargs = self._normalize_generation_kwargs(generation_kwargs)
+
+                if self._force_manual_generate:
+                    outputs = []
+                    for prompt in prompts:
+                        text = self._manual_generate(prompt, gen_kwargs)
+                        if text is None or not str(text).strip() or not self._looks_like_json(text):
+                            strict_kwargs = dict(gen_kwargs)
+                            strict_kwargs["do_sample"] = False
+                            strict_kwargs["temperature"] = 0.0
+                            strict_kwargs.pop("top_p", None)
+                            retry_text = self._manual_generate(prompt, strict_kwargs)
+                            if retry_text and str(retry_text).strip():
+                                text = retry_text
+                            if text is None or not str(text).strip() or not self._looks_like_json(text):
+                                repair_prompt = self._json_retry_prompt(prompt)
+                                repair_text = self._manual_generate(repair_prompt, strict_kwargs)
+                                if repair_text and str(repair_text).strip():
+                                    text = repair_text
+                        outputs.append(text if text is not None else "")
+                    return outputs
 
                 result = self._pipeline(prompts, **gen_kwargs)
                 outputs = []
                 for prompt, output in zip(prompts, result):
-                    text = _strip_prompt(_extract_text(output), prompt)
+                    text = self._extract_generated_text(output, prompt)
                     if text is None or not str(text).strip():
                         fallback_kwargs = dict(gen_kwargs)
                         min_new_tokens = fallback_kwargs.get("min_new_tokens")
@@ -476,11 +545,20 @@ class HFLocalProvider:
                             max_new = fallback_kwargs.get("max_new_tokens")
                             fallback_kwargs["min_new_tokens"] = min(32, max_new) if isinstance(max_new, int) and max_new > 0 else 32
                         fallback_output = self._pipeline(prompt, **fallback_kwargs)
-                        text = _strip_prompt(_extract_text(fallback_output), prompt)
-                    if text is None or not str(text).strip():
+                        text = self._extract_generated_text(fallback_output, prompt)
+                    if text is None or not str(text).strip() or not self._looks_like_json(text):
                         manual = self._manual_generate(prompt, gen_kwargs)
                         if manual and str(manual).strip():
                             text = manual
+                        if text is None or not str(text).strip() or not self._looks_like_json(text):
+                            repair_prompt = self._json_retry_prompt(prompt)
+                            strict_kwargs = dict(gen_kwargs)
+                            strict_kwargs["do_sample"] = False
+                            strict_kwargs["temperature"] = 0.0
+                            strict_kwargs.pop("top_p", None)
+                            manual = self._manual_generate(repair_prompt, strict_kwargs)
+                            if manual and str(manual).strip():
+                                text = manual
                     outputs.append(text if text is not None else output)
                 return outputs
 

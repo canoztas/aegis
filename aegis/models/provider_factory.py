@@ -148,6 +148,10 @@ def create_provider(model: ModelRecord) -> Any:
                 hf_kwargs["device_map"] = runtime.device_map
             if runtime.dtype:
                 hf_kwargs["torch_dtype"] = runtime.dtype
+            if str(runtime.device).startswith("cpu"):
+                hf_kwargs.pop("load_in_4bit", None)
+                hf_kwargs.pop("load_in_8bit", None)
+                hf_kwargs.pop("quantization_config", None)
             runtime_cfg = settings.get("runtime") or {}
             quantization_set = ("quantization" in runtime_cfg) or ("quantization" in settings)
             if quantization_set:

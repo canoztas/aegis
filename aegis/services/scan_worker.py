@@ -6,6 +6,7 @@ import threading
 from typing import Dict, List, Optional, Any
 
 from aegis.models.registry import ModelRegistryV2
+from aegis.utils import debug_scan_log
 
 
 @dataclass
@@ -14,6 +15,7 @@ class ScanJob:
     source_files: Optional[Dict[str, str]]
     model_ids: List[str]
     consensus_strategy: str
+    judge_model_id: Optional[str] = None
 
 
 class ScanWorker:
@@ -34,6 +36,7 @@ class ScanWorker:
         self._app = app
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+        debug_scan_log("[scan-debug] ScanWorker started")
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -41,6 +44,7 @@ class ScanWorker:
     def enqueue(self, job: ScanJob) -> None:
         self._ensure_scan_state(job.scan_id)
         self._queue.put(job)
+        debug_scan_log(f"[scan-debug] enqueued scan {job.scan_id} (models={len(job.model_ids)})")
 
     def requeue_pending(self) -> None:
         """Requeue scans that were pending/running when the server restarted."""
@@ -51,6 +55,7 @@ class ScanWorker:
             pending = scan_repo.list_by_statuses(["pending", "running"], limit=100)
         except Exception:
             return
+        debug_scan_log(f"[scan-debug] requeue pending scans: {len(pending)}")
 
         for scan_data in pending:
             scan_id = scan_data.get("scan_id")
@@ -59,6 +64,7 @@ class ScanWorker:
             pipeline_config = scan_data.get("pipeline_config", {}) or {}
             model_ids = pipeline_config.get("models", []) or []
             consensus_strategy = scan_data.get("consensus_strategy", "union")
+            judge_model_id = pipeline_config.get("judge_model_id")
 
             if not model_ids:
                 registry = ModelRegistryV2()
@@ -71,6 +77,7 @@ class ScanWorker:
                 source_files=None,
                 model_ids=model_ids,
                 consensus_strategy=consensus_strategy,
+                judge_model_id=judge_model_id,
             ))
 
     def _ensure_scan_state(self, scan_id: str) -> None:
@@ -96,6 +103,7 @@ class ScanWorker:
             if content is None:
                 continue
             source_files[file_path] = content
+        debug_scan_log(f"[scan-debug] loaded {len(source_files)} files for scan {scan_id}")
         return source_files
 
     def _run(self) -> None:
@@ -113,6 +121,7 @@ class ScanWorker:
                 job.source_files = self._load_source_files(job.scan_id)
 
             if not job.source_files:
+                debug_scan_log(f"[scan-debug] no source files for scan {job.scan_id}")
                 if self.use_v2:
                     scan_repo, _ = self.get_v2_repositories()
                     try:
@@ -127,6 +136,8 @@ class ScanWorker:
                 source_files=job.source_files,
                 model_ids=job.model_ids,
                 consensus_strategy=job.consensus_strategy,
+                judge_model_id=job.judge_model_id,
                 app=self._app,
             )
+            debug_scan_log(f"[scan-debug] scan completed: {job.scan_id}")
             self._queue.task_done()

@@ -84,8 +84,15 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.7;
+    }
   }
 
   .step-details {
@@ -200,6 +207,7 @@
       opacity: 0;
       transform: translateY(-10px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
@@ -321,7 +329,9 @@
   }
 
   @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>
 {% endblock %}
@@ -353,7 +363,7 @@
       </div>
       <div class="progress-stats">
         <span><strong id="progressPercent">0</strong>% complete</span>
-        <span id="progressMessage">Initializing...</span>
+        <span id="progressMessage" class="fw-bold text-primary font-monospace">Initializing...</span>
         <span id="progressTime">Elapsed: <strong>0s</strong></span>
       </div>
     </div>
@@ -442,11 +452,11 @@
 {% block scripts %}
 <script>
   // SSE Client for Real-Time Progress
-  (function() {
+  (function () {
     'use strict';
 
     const scanId = '{{ scan_id }}';
-    const startTime = Date.now();
+    let startTime = Date.now();
     let eventSource = null;
     let findingsCount = 0;
     let steps = {};
@@ -489,6 +499,11 @@
         }
         const data = await response.json();
         const status = data && data.status;
+
+        if (data.started_at) {
+          startTime = new Date(data.started_at).getTime();
+        }
+
         if (status === "completed") {
           onCompleted({});
         } else if (status === "failed") {
@@ -523,7 +538,7 @@
       eventSource.addEventListener('completed', handleCompleted);
       eventSource.addEventListener('error', handleError);
 
-      eventSource.onerror = function(e) {
+      eventSource.onerror = function (e) {
         logMessage('Connection error, retrying...', 'error');
         // EventSource will auto-reconnect
       };
@@ -657,7 +672,8 @@
       }
 
       updateModelsUI();
-      logMessage(`Model completed: ${modelId} (${latency}ms, ${findingsCount} findings, ${inputTokens+outputTokens} tokens, ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
+      logMessage(`Model completed: ${modelId} (${latency}ms, ${findingsCount} findings, ${inputTokens + outputTokens} tokens,
+${tokensPerSec.toFixed(1)} tok/s)`, 'success');
     }
 
     function handleProgress(e) {
@@ -668,6 +684,18 @@
       const message = data.message || '';
 
       updateProgressBar(percent, message);
+
+      if (message && message.startsWith("Scanning")) {
+        // Debounce logging or just log it
+        // To avoid spamming, we can check if it's different from last log?
+        // But for now, just log it.
+        // Actually, logMessage timestamps it.
+        // Let's check if the last log entry is same to avoid duplicate if progress updates generic percent?
+        // But message includes filename, so it changes per file.
+        // We might get multiple updates per file if chunks?
+        // ScanService sends ONE update per file per model.
+        logMessage(message, 'info');
+      }
     }
 
     function handleFinding(e) {
@@ -730,7 +758,7 @@
 
       // Enable view results button
       document.getElementById('viewResultsBtn').disabled = false;
-      document.getElementById('viewResultsBtn').onclick = function() {
+      document.getElementById('viewResultsBtn').onclick = function () {
         window.location.href = `/scan/${scanId}`;
       };
 
@@ -839,16 +867,16 @@
         const meta = getStepMeta(step);
 
         return `
-          <div class="step-indicator">
-            <div class="step-icon ${step.status}">
-              ${icon}
-            </div>
-            <div class="step-details">
-              <div class="step-name">${stepId}</div>
-              <div class="step-meta">${meta}</div>
-            </div>
-          </div>
-        `;
+<div class="step-indicator">
+  <div class="step-icon ${step.status}">
+    ${icon}
+  </div>
+  <div class="step-details">
+    <div class="step-name">${stepId}</div>
+    <div class="step-meta">${meta}</div>
+  </div>
+</div>
+`;
       }).join('');
     }
 
@@ -898,82 +926,86 @@
         let deviceBadge = '';
         if (model.device && model.device !== 'unknown') {
           const deviceColor = model.device.includes('cuda') ? 'success' :
-                             model.device.includes('mps') ? 'info' :
-                             'secondary';
-          deviceBadge = `<span class="badge bg-${deviceColor} bg-opacity-10 text-${deviceColor} border border-${deviceColor} border-opacity-25" style="font-size: 0.7rem;">${model.device.toUpperCase()}</span>`;
+            model.device.includes('mps') ? 'info' :
+              'secondary';
+          deviceBadge = `<span
+  class="badge bg-${deviceColor} bg-opacity-10 text-${deviceColor} border border-${deviceColor} border-opacity-25"
+  style="font-size: 0.7rem;">${model.device.toUpperCase()}</span>`;
         }
 
         let quantBadge = '';
         if (model.quantization) {
-          quantBadge = `<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25" style="font-size: 0.7rem;">${model.quantization}</span>`;
+          quantBadge = `<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25"
+  style="font-size: 0.7rem;">${model.quantization}</span>`;
         }
 
         let precisionBadge = '';
         if (model.precision) {
-          precisionBadge = `<span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25" style="font-size: 0.7rem;">${model.precision}</span>`;
+          precisionBadge = `<span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25"
+  style="font-size: 0.7rem;">${model.precision}</span>`;
         }
 
         return `
-          <div class="model-panel">
-            <div class="model-header">
-              <div>
-                <span class="model-name">${model.name}</span>
-                <div class="mt-1" style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
-                  ${deviceBadge}
-                  ${quantBadge}
-                  ${precisionBadge}
-                </div>
-              </div>
-              <span class="model-status ${model.status}">${model.status}</span>
-            </div>
-            <div class="model-stats" style="grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));">
-              <div class="model-stat">
-                <span class="model-stat-label">Calls</span>
-                <span class="model-stat-value">${model.calls}</span>
-              </div>
-              <div class="model-stat">
-                <span class="model-stat-label">Avg Latency</span>
-                <span class="model-stat-value">${avgLatency}ms</span>
-              </div>
-              <div class="model-stat">
-                <span class="model-stat-label">Findings</span>
-                <span class="model-stat-value">${model.findingsCount}</span>
-              </div>
-              ${isHF || isCloud ? `
-              <div class="model-stat">
-                <span class="model-stat-label">Total Tokens</span>
-                <span class="model-stat-value">${totalTokens.toLocaleString()}</span>
-              </div>
-              ` : ''}
-              ${model.tokensPerSec ? `
-              <div class="model-stat">
-                <span class="model-stat-label">Speed</span>
-                <span class="model-stat-value">${model.tokensPerSec.toFixed(1)} tok/s</span>
-              </div>
-              ` : ''}
-              ${model.vramUsage > 0 ? `
-              <div class="model-stat">
-                <span class="model-stat-label">VRAM</span>
-                <span class="model-stat-value">${model.vramUsage}MB</span>
-              </div>
-              ` : ''}
-              ${model.loadTime > 0 ? `
-              <div class="model-stat">
-                <span class="model-stat-label">Load Time</span>
-                <span class="model-stat-value">${model.loadTime}ms</span>
-              </div>
-              ` : ''}
-            </div>
-            ${isHF || isCloud ? `
-            <div class="mt-2 pt-2 border-top border-subtle" style="font-size: 0.7rem; color: var(--text-secondary);">
-              <div class="d-flex justify-content-between">
-                <span>Input: ${model.tokens.input.toLocaleString()} tokens</span>
-                <span>Output: ${model.tokens.output.toLocaleString()} tokens</span>
-              </div>
-            </div>
-            ` : ''}
-          </div>
-        `;
+<div class="model-panel">
+  <div class="model-header">
+    <div>
+      <span class="model-name">${model.name}</span>
+      <div class="mt-1" style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+        ${deviceBadge}
+        ${quantBadge}
+        ${precisionBadge}
+      </div>
+    </div>
+    <span class="model-status ${model.status}">${model.status}</span>
+  </div>
+  <div class="model-stats" style="grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));">
+    <div class="model-stat">
+      <span class="model-stat-label">Calls</span>
+      <span class="model-stat-value">${model.calls}</span>
+    </div>
+    <div class="model-stat">
+      <span class="model-stat-label">Avg Latency</span>
+      <span class="model-stat-value">${avgLatency}ms</span>
+    </div>
+    <div class="model-stat">
+      <span class="model-stat-label">Findings</span>
+      <span class="model-stat-value">${model.findingsCount}</span>
+    </div>
+    ${isHF || isCloud ? `
+    <div class="model-stat">
+      <span class="model-stat-label">Total Tokens</span>
+      <span class="model-stat-value">${totalTokens.toLocaleString()}</span>
+    </div>
+    ` : ''}
+    ${model.tokensPerSec ? `
+    <div class="model-stat">
+      <span class="model-stat-label">Speed</span>
+      <span class="model-stat-value">${model.tokensPerSec.toFixed(1)} tok/s</span>
+    </div>
+    ` : ''}
+    ${model.vramUsage > 0 ? `
+    <div class="model-stat">
+      <span class="model-stat-label">VRAM</span>
+      <span class="model-stat-value">${model.vramUsage}MB</span>
+    </div>
+    ` : ''}
+    ${model.loadTime > 0 ? `
+    <div class="model-stat">
+      <span class="model-stat-label">Load Time</span>
+      <span class="model-stat-value">${model.loadTime}ms</span>
+    </div>
+    ` : ''}
+  </div>
+  ${isHF || isCloud ? `
+  <div class="mt-2 pt-2 border-top border-subtle" style="font-size: 0.7rem; color: var(--text-secondary);">
+    <div class="d-flex justify-content-between">
+      <span>Input: ${model.tokens.input.toLocaleString()} tokens</span>
+      <span>Output: ${model.tokens.output.toLocaleString()} tokens</span>
+    </div>
+  </div>
+  ` : ''}
+</div>
+`;
       }).join('');
     }
 
@@ -992,13 +1024,13 @@
       const findingEl = document.createElement('div');
       findingEl.className = `finding-item severity-${finding.severity || 'medium'}`;
       findingEl.innerHTML = `
-        <div class="finding-name">${finding.name || 'Unknown Vulnerability'}</div>
-        <div class="finding-meta">
-          ${finding.severity ? `<span class="badge bg-secondary">${finding.severity}</span>` : ''}
-          ${finding.cwe ? `<span class="badge bg-secondary">${finding.cwe}</span>` : ''}
-          ${finding.file ? `<span class="text-muted ms-2">${finding.file}</span>` : ''}
-        </div>
-      `;
+<div class="finding-name">${finding.name || 'Unknown Vulnerability'}</div>
+<div class="finding-meta">
+  ${finding.severity ? `<span class="badge bg-secondary">${finding.severity}</span>` : ''}
+  ${finding.cwe ? `<span class="badge bg-secondary">${finding.cwe}</span>` : ''}
+  ${finding.file ? `<span class="text-muted ms-2">${finding.file}</span>` : ''}
+</div>
+`;
 
       container.insertBefore(findingEl, container.firstChild);
 
@@ -1035,7 +1067,7 @@
     }, 1000);
 
     // Cancel button handler
-    document.getElementById('cancelScanBtn').addEventListener('click', async function() {
+    document.getElementById('cancelScanBtn').addEventListener('click', async function () {
       if (!confirm('Are you sure you want to cancel this scan?')) {
         return;
       }
@@ -1047,7 +1079,7 @@
       try {
         const response = await fetch(`/api/scan/${scanId}/cancel`, {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'}
+          headers: { 'Content-Type': 'application/json' }
         });
 
         const data = await response.json();
@@ -1071,4 +1103,3 @@
   })();
 </script>
 {% endblock %}
-

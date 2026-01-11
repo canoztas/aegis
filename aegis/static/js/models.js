@@ -128,7 +128,7 @@ async function loadOllamaModels(forceRefresh) {
       const isReg = regIds.has(name);
 
       html += `
-            <div class="list-group-item bg-panel border-subtle text-light p-3">
+            <div class="list-group-item border-subtle text-light p-4">
               <div class="d-flex justify-content-between align-items-center">
                 <div>
                   <div class="fw-bold font-monospace small text-primary">${name}</div>
@@ -160,7 +160,7 @@ async function loadHuggingFaceModels() {
     const presets = presetsRes.presets || [];
 
     if (presets.length === 0) {
-      container.innerHTML = `< div class="text-center py-5 text-secondary font-monospace" > NO_PRESETS_AVAILABLE</div > `;
+      container.innerHTML = `<div class="text-center py-5 text-secondary font-monospace">NO_PRESETS_AVAILABLE</div>`;
       return;
     }
 
@@ -173,12 +173,15 @@ async function loadHuggingFaceModels() {
       const presetId = preset.model_id.split('/').pop().replace(/[^a-z0-9]/gi, '_');
 
       html += `
-        < div class="list-group-item bg-panel border-subtle text-light p-4" >
+        <div class="list-group-item bg-panel border-subtle text-light p-4">
           <div class="d-flex justify-content-between align-items-start gap-3">
             <div class="flex-grow-1">
               <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
                 <span class="fw-bold text-white fs-5" style="letter-spacing: 0.05em;">${preset.name}</span>
-                ${(preset.recommended_roles || []).map(r => `<span class="badge bg-primary bg-opacity-25 text-primary-emphasis border border-primary border-opacity-25 rounded-0 small font-monospace">${r}</span>`).join(' ')}
+                ${(preset.recommended_roles || []).map(r => {
+                  const label = String(r).replace(/_/g, " ").toUpperCase();
+                  return `<span class="badge bg-primary bg-opacity-20 text-primary border border-primary border-opacity-25 rounded-0 small font-monospace">${label}</span>`;
+                }).join(' ')}
               </div>
               <div class="text-light opacity-75 mb-2" style="font-size: 0.95rem; line-height: 1.5;">${preset.description}</div>
               <div class="font-monospace small text-aegis-gold opacity-75 text-break bg-black bg-opacity-25 p-2 rounded-1 border border-subtle d-inline-block">
@@ -192,13 +195,13 @@ async function loadHuggingFaceModels() {
         }
             </div>
           </div>
-            </div > `;
+        </div>`;
     });
     html += '</div>';
     container.innerHTML = html;
   } catch (e) {
     console.error("HF Error", e);
-    document.getElementById("hfModelsList").innerHTML = `< div class="alert alert-danger font-monospace small" > CONNECTION_ERROR: ${e.message}</div > `;
+    document.getElementById("hfModelsList").innerHTML = `<div class="alert alert-danger font-monospace small">CONNECTION_ERROR: ${e.message}</div>`;
   }
 }
 

@@ -50,6 +50,9 @@ class HFTextClassificationParser(BaseParser):
         severity_high_threshold = self.config.get("severity_high_threshold", 0.85)
         severity_medium_threshold = self.config.get("severity_medium_threshold", 0.65)
 
+        # Normalize output shape
+        if isinstance(raw_output, dict):
+            raw_output = [raw_output]
         # Validate input
         if not isinstance(raw_output, list):
             errors.append(f"Expected list output, got {type(raw_output)}")

@@ -68,7 +68,16 @@ class BaseRunner(ABC):
         Returns:
             Formatted prompt
         """
-        return template.format(**variables)
+        if not isinstance(template, str):
+            return str(template)
+        try:
+            return template.format(**variables)
+        except Exception:
+            # Fallback for user-provided templates that contain raw JSON braces.
+            safe = template
+            for key, value in variables.items():
+                safe = safe.replace(f"{{{key}}}", "" if value is None else str(value))
+            return safe
 
     def build_prompt(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
         """

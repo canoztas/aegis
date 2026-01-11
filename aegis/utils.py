@@ -5,6 +5,20 @@ from typing import Dict, Optional, Iterable, Tuple
 from flask import current_app
 
 
+def _debug_scan_enabled() -> bool:
+    value = os.environ.get("AEGIS_DEBUG_SCAN", "")
+    return value.lower() not in {"0", "false", "no"}
+
+
+def debug_scan_log(message: str) -> None:
+    if not _debug_scan_enabled():
+        return
+    try:
+        current_app.logger.info(message)
+    except RuntimeError:
+        print(message)
+
+
 def allowed_file(filename: Optional[str]) -> bool:
     if filename is None:
         return False
@@ -42,6 +56,7 @@ def extract_source_files(zip_path: str) -> Dict[str, str]:
     }
 
     try:
+        debug_scan_log(f"[scan-debug] extracting zip: {zip_path}")
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             for file_info in zip_ref.filelist:
                 if file_info.is_dir():
@@ -62,7 +77,7 @@ def extract_source_files(zip_path: str) -> Dict[str, str]:
                                 )
                                 source_files[file_path] = content
                         except Exception as e:
-                            print(f"Error reading {file_path}: {e}")
+                            debug_scan_log(f"[scan-debug] failed reading {file_path}: {e}")
                             continue
 
     except zipfile.BadZipFile:
@@ -71,7 +86,13 @@ def extract_source_files(zip_path: str) -> Dict[str, str]:
         raise ValueError(f"Error extracting ZIP file: {e}")
 
     if not source_files:
+        debug_scan_log(f"[scan-debug] no source files found in {zip_path}")
         raise ValueError("No source code files found in the ZIP archive")
+
+    debug_scan_log(f"[scan-debug] extracted {len(source_files)} source files from {zip_path}")
+    if _debug_scan_enabled():
+        sample = list(source_files.keys())[:10]
+        debug_scan_log(f"[scan-debug] sample files: {', '.join(sample)}")
 
     return source_files
 
