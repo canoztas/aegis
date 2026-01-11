@@ -171,10 +171,29 @@ class JSONFindingsParser(BaseParser):
         Extract FindingCandidates from parsed JSON.
         """
         findings = []
-        findings_list = data.get("findings", data if isinstance(data, list) else [])
+        findings_list: Any = None
+
+        if isinstance(data, list):
+            findings_list = data
+        elif isinstance(data, dict):
+            if "findings" in data:
+                findings_list = data.get("findings")
+            else:
+                for key in ("vulnerabilities", "issues", "issue", "vulnerability", "finding", "result"):
+                    if key in data:
+                        findings_list = data.get(key)
+                        break
+
+            if findings_list is None:
+                candidate_keys = {"severity", "description", "message", "category", "type", "title"}
+                if candidate_keys.intersection(data.keys()):
+                    findings_list = [data]
 
         if isinstance(findings_list, dict):
-            findings_list = findings_list.get("findings", [])
+            if "findings" in findings_list and len(findings_list) == 1:
+                findings_list = findings_list.get("findings", [])
+            else:
+                findings_list = [findings_list]
 
         if not isinstance(findings_list, list):
             logger.warning("'findings' field is not a list")
@@ -188,18 +207,40 @@ class JSONFindingsParser(BaseParser):
                 continue
 
             try:
+                severity_value = str(item.get("severity", "medium")).lower()
+                if severity_value not in {"critical", "high", "medium", "low", "info"}:
+                    severity_value = "medium"
+                category_value = (
+                    item.get("category")
+                    or item.get("type")
+                    or item.get("issue_type")
+                    or item.get("vulnerability_type")
+                    or "unknown"
+                )
+                description_value = (
+                    item.get("description")
+                    or item.get("message")
+                    or item.get("summary")
+                    or ""
+                )
+                confidence_value = item.get("confidence", 1.0)
+                try:
+                    confidence_value = float(confidence_value)
+                except (TypeError, ValueError):
+                    confidence_value = 1.0
+
                 finding = FindingCandidate(
-                    file_path=item.get("file_path", default_file),
-                    line_start=item.get("line_start", item.get("line", 1)),
-                    line_end=item.get("line_end"),
+                    file_path=item.get("file_path", item.get("file", default_file)),
+                    line_start=item.get("line_start", item.get("start_line", item.get("line", 1))),
+                    line_end=item.get("line_end", item.get("end_line")),
                     snippet=item.get("snippet", default_snippet),
-                    title=item.get("title"),
-                    category=item.get("category", item.get("type", "unknown")),
+                    title=item.get("title") or item.get("type"),
+                    category=category_value,
                     cwe=item.get("cwe") or item.get("cwe_id"),
-                    severity=item.get("severity", "medium"),
-                    description=item.get("description", item.get("message", "")),
+                    severity=severity_value,
+                    description=description_value,
                     recommendation=item.get("recommendation"),
-                    confidence=float(item.get("confidence", 1.0)),
+                    confidence=confidence_value,
                     metadata=item.get("metadata", {}),
                 )
                 findings.append(finding)

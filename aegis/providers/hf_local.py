@@ -105,6 +105,8 @@ class HFLocalProvider:
         self.generation_kwargs = generation_kwargs or {}
 
         self._pipeline = None
+        self._model = None
+        self._tokenizer = None
         worker_count = 1
         try:
             if max_workers is not None:
@@ -216,6 +218,8 @@ class HFLocalProvider:
                         pipeline_kwargs["device"] = device_arg
 
                     self._pipeline = _pipeline(**pipeline_kwargs)
+                self._model = getattr(self._pipeline, "model", None)
+                self._tokenizer = getattr(self._pipeline, "tokenizer", None)
                 logger.info(f"Model loaded successfully: {self.model_id}")
             except Exception as e:
                 err_str = str(e)
@@ -237,6 +241,70 @@ class HFLocalProvider:
                     raise RuntimeError(friendly)
                 logger.error(f"Failed to load model {self.model_id}: {e}")
                 raise
+
+    def _normalize_generation_kwargs(self, generation_kwargs: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+        gen_kwargs = {
+            "max_new_tokens": 512,
+            "temperature": 0.1,
+            "do_sample": True,
+            "return_full_text": False,
+        }
+        if self.generation_kwargs:
+            gen_kwargs.update(self.generation_kwargs)
+        if generation_kwargs:
+            gen_kwargs.update(generation_kwargs)
+
+        max_new = gen_kwargs.get("max_new_tokens")
+        if not isinstance(max_new, int) or max_new <= 0:
+            gen_kwargs["max_new_tokens"] = 256
+        min_new = gen_kwargs.get("min_new_tokens")
+        if isinstance(min_new, (int, float)):
+            min_new = int(min_new)
+            if min_new <= 0:
+                gen_kwargs.pop("min_new_tokens", None)
+            else:
+                if min_new > gen_kwargs["max_new_tokens"]:
+                    min_new = max(1, gen_kwargs["max_new_tokens"] // 2)
+                gen_kwargs["min_new_tokens"] = min_new
+
+        temperature = gen_kwargs.get("temperature")
+        if isinstance(temperature, (int, float)) and temperature < 0:
+            gen_kwargs["temperature"] = 0.0
+
+        top_p = gen_kwargs.get("top_p")
+        if isinstance(top_p, (int, float)) and (top_p <= 0 or top_p > 1):
+            gen_kwargs.pop("top_p", None)
+
+        return gen_kwargs
+
+    def _manual_generate(self, prompt: str, gen_kwargs: Dict[str, Any]) -> Optional[str]:
+        if not _torch or self._model is None or self._tokenizer is None:
+            return None
+
+        try:
+            inputs = self._tokenizer(prompt, return_tensors="pt")
+            if not getattr(self._model, "hf_device_map", None) and hasattr(self._model, "device"):
+                device = self._model.device
+                inputs = {k: v.to(device) for k, v in inputs.items()}
+
+            safe_kwargs = dict(gen_kwargs)
+            for key in ("return_full_text", "return_text", "clean_up_tokenization_spaces"):
+                safe_kwargs.pop(key, None)
+
+            if self._tokenizer.eos_token_id is not None:
+                safe_kwargs.setdefault("eos_token_id", self._tokenizer.eos_token_id)
+                safe_kwargs.setdefault("pad_token_id", self._tokenizer.eos_token_id)
+
+            with _torch.inference_mode():
+                output_ids = self._model.generate(**inputs, **safe_kwargs)
+
+            input_len = inputs["input_ids"].shape[-1]
+            generated = output_ids[0][input_len:]
+            text = self._tokenizer.decode(generated, skip_special_tokens=True)
+            return text
+        except Exception as e:
+            logger.warning("Manual generate fallback failed: %s", e)
+            return None
 
     async def analyze(
         self,
@@ -305,14 +373,7 @@ class HFLocalProvider:
 
             elif self.task_type == "text-generation":
                 # Merge default and provided kwargs
-                gen_kwargs = {
-                    "max_new_tokens": 512,
-                    "temperature": 0.1,
-                    "do_sample": True,
-                    "return_full_text": False,
-                }
-                gen_kwargs.update(self.generation_kwargs)
-                gen_kwargs.update(generation_kwargs)
+                gen_kwargs = self._normalize_generation_kwargs(generation_kwargs)
 
                 # Some models echo the prompt even with return_full_text=False
                 result = self._pipeline(prompt, **gen_kwargs)
@@ -327,6 +388,11 @@ class HFLocalProvider:
                         fallback_kwargs["min_new_tokens"] = min(32, max_new) if isinstance(max_new, int) and max_new > 0 else 32
                     result = self._pipeline(prompt, **fallback_kwargs)
                     text = _strip_prompt(_extract_text(result), prompt)
+
+                if text is None or not str(text).strip():
+                    manual = self._manual_generate(prompt, gen_kwargs)
+                    if manual and str(manual).strip():
+                        text = manual
 
                 return text if text is not None else result
 
@@ -397,14 +463,7 @@ class HFLocalProvider:
                         return text
                     return text
 
-                gen_kwargs = {
-                    "max_new_tokens": 512,
-                    "temperature": 0.1,
-                    "do_sample": True,
-                    "return_full_text": False,
-                }
-                gen_kwargs.update(self.generation_kwargs)
-                gen_kwargs.update(generation_kwargs)
+                gen_kwargs = self._normalize_generation_kwargs(generation_kwargs)
 
                 result = self._pipeline(prompts, **gen_kwargs)
                 outputs = []
@@ -418,6 +477,10 @@ class HFLocalProvider:
                             fallback_kwargs["min_new_tokens"] = min(32, max_new) if isinstance(max_new, int) and max_new > 0 else 32
                         fallback_output = self._pipeline(prompt, **fallback_kwargs)
                         text = _strip_prompt(_extract_text(fallback_output), prompt)
+                    if text is None or not str(text).strip():
+                        manual = self._manual_generate(prompt, gen_kwargs)
+                        if manual and str(manual).strip():
+                            text = manual
                     outputs.append(text if text is not None else output)
                 return outputs
 

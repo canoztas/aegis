@@ -19,6 +19,21 @@ class TriageRunner(BaseRunner):
     - Returns triage signals or low-detail findings
     """
 
+    # System prompt for cloud providers
+    DEFAULT_SYSTEM_PROMPT = """You are a security code analyzer for initial triage. Return ONLY valid JSON with no additional text.
+
+Your response must match this structure:
+{
+  "findings": [],
+  "triage_signal": {
+    "is_suspicious": true/false,
+    "confidence": 0.0-1.0,
+    "reason": "<brief explanation>"
+  }
+}
+
+Return ONLY the JSON. No explanations or prose."""
+
     def __init__(self, provider: Any, parser: Any, config: Optional[Dict[str, Any]] = None):
         """Initialize triage runner."""
         super().__init__(provider, parser, ModelRole.TRIAGE, config)
@@ -51,8 +66,18 @@ class TriageRunner(BaseRunner):
                 # Async provider (HF)
                 raw_output = await self.provider.analyze(formatted_prompt, context, **kwargs)
             elif hasattr(self.provider, 'generate'):
-                # Sync provider (Ollama)
-                raw_output = self.provider.generate(formatted_prompt)
+                # Check if provider supports system_prompt (cloud providers)
+                import inspect
+                sig = inspect.signature(self.provider.generate)
+                if 'system_prompt' in sig.parameters:
+                    # Cloud provider - use system prompt for JSON compliance
+                    raw_output = self.provider.generate(
+                        formatted_prompt,
+                        system_prompt=self.DEFAULT_SYSTEM_PROMPT
+                    )
+                else:
+                    # Ollama or other sync provider
+                    raw_output = self.provider.generate(formatted_prompt)
             else:
                 raise ValueError(f"Provider {self.provider} has no analyze() or generate() method")
 

@@ -239,10 +239,29 @@ body {
 }
 
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
+}
+
+/* ===================================
+   ACCESSIBILITY FIXES
+   =================================== */
+
+/* Improve Input Placeholder Contrast */
+.form-control::placeholder,
+.form-select::placeholder {
+  color: var(--text-secondary) !important;
+  opacity: 0.6;
+  /* Ensure it looks different from value but readable */
+}
+
+.form-control:focus::placeholder {
+  opacity: 0.4;
 }

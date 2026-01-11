@@ -519,6 +519,7 @@
       eventSource.addEventListener('progress', handleProgress);
       eventSource.addEventListener('cancelled', handleCancelled);
       eventSource.addEventListener('finding', handleFinding);
+      eventSource.addEventListener('warning', handleWarning);
       eventSource.addEventListener('completed', handleCompleted);
       eventSource.addEventListener('error', handleError);
 
@@ -676,6 +677,26 @@
 
       addFinding(finding, modelId);
       logMessage(`Finding: ${finding.name} (${finding.severity})`, 'warning');
+    }
+
+    function handleWarning(e) {
+      const data = JSON.parse(e.data);
+      const message = data.warning || 'Warning';
+      const ctx = data.context || {};
+      const details = [];
+
+      if (ctx.model_id) details.push(`model=${ctx.model_id}`);
+      if (ctx.file_path) details.push(`file=${ctx.file_path}`);
+      if (Array.isArray(ctx.errors) && ctx.errors.length) {
+        details.push(`errors=${ctx.errors.join("; ")}`);
+      }
+      if (ctx.raw_snippet) {
+        const snippet = String(ctx.raw_snippet).replace(/\s+/g, ' ').trim();
+        details.push(`output="${snippet}"`);
+      }
+
+      const suffix = details.length ? ` (${details.join(", ")})` : '';
+      logMessage(`${message}${suffix}`, 'warning');
     }
 
     function handleCompleted(e) {

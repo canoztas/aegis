@@ -414,7 +414,7 @@ class PipelineExecutor:
                 batches = list(self._chunk_batches(chunks, batch_size))
                 futures = [
                     executor.submit(
-                        self.execution_engine.run_model_batch_to_findings,
+                        self.execution_engine.run_model_batch_sync,
                         model,
                         batch,
                         role_enum,
@@ -422,14 +422,32 @@ class PipelineExecutor:
                     for batch in batches
                 ]
 
-                for future in futures:
+                for future, batch in zip(futures, batches):
                     try:
-                        batch_findings = future.result()
+                        batch_results = future.result()
                     except Exception as e:
                         emitter.warning(f"Batch failed for model {model.model_id}: {e}", {"model_id": model.model_id})
                         continue
 
-                    for chunk_findings in batch_findings:
+                    for result, chunk in zip(batch_results, batch):
+                        if result.parse_errors:
+                            raw_snippet = None
+                            if result.raw_output:
+                                raw_snippet = str(result.raw_output)
+                                if len(raw_snippet) > 800:
+                                    raw_snippet = raw_snippet[:800] + "..."
+                            emitter.warning(
+                                "Model parse errors",
+                                {
+                                    "model_id": model.model_id,
+                                    "file_path": chunk.get("file_path"),
+                                    "line_start": chunk.get("line_start"),
+                                    "line_end": chunk.get("line_end"),
+                                    "errors": result.parse_errors,
+                                    "raw_snippet": raw_snippet,
+                                },
+                            )
+                        chunk_findings = [self._candidate_to_finding(c) for c in result.findings]
                         collected.extend(chunk_findings)
                         for finding in chunk_findings:
                             emitter.finding_emitted(finding.to_dict(), step_id)

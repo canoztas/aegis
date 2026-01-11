@@ -429,6 +429,42 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="testModelModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content bg-panel border-subtle border border-top-0 rounded-0 shadow-lg">
+      <div class="modal-header bg-app border-bottom border-subtle py-2">
+        <h6 class="modal-title font-monospace text-uppercase text-light">
+          Test Model: <span id="testModelName"></span>
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <input type="hidden" id="testModelId">
+
+        <div class="mb-3">
+          <label class="form-label text-secondary small font-monospace mb-1">PROMPT</label>
+          <textarea rows="4" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
+            id="testPrompt"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-secondary small font-monospace mb-1">FILE_PATH</label>
+          <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
+            id="testFilePath" placeholder="sample.py">
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-secondary small font-monospace mb-1">RESULT</label>
+          <pre class="bg-black bg-opacity-25 border border-subtle p-3 rounded-0 text-light small"
+            id="testResult" style="max-height: 300px; overflow: auto;"></pre>
+        </div>
+      </div>
+      <div class="modal-footer border-top border-subtle py-2 bg-app">
+        <button type="button" class="btn btn-sm btn-primary rounded-0 font-monospace w-100"
+          onclick="runTestModel()">RUN_TEST</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}

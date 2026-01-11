@@ -13,7 +13,9 @@ document.addEventListener("DOMContentLoaded", function () {
   window.registerHFPresetFromModal = registerHFPresetFromModal;
   window.openHFPresetModal = openHFPresetModal;
   window.openEditModelModal = openEditModelModal;
+  window.openTestModelModal = openTestModelModal;
   window.saveRegisteredModel = saveRegisteredModel;
+  window.runTestModel = runTestModel;
 });
 
 async function fetchJson(url, options, fallbackUrls) {
@@ -81,6 +83,9 @@ async function loadRegisteredModels() {
               <small class="text-secondary font-monospace extra-small">${modelId}</small>
             </div>
             <div class="d-flex gap-2">
+               <button class="btn btn-sm btn-outline-secondary border-0 hover-text-primary" onclick="openTestModelModal('${modelId}')">
+                    <i class="bi bi-lightning-charge"></i>
+               </button>
                <button class="btn btn-sm btn-outline-primary border-0 hover-text-primary" onclick="openEditModelModal('${modelId}')">
                     <i class="bi bi-sliders"></i>
                </button>
@@ -256,6 +261,53 @@ function openEditModelModal(modelId) {
 
   const modal = new bootstrap.Modal(document.getElementById("editModelModal"));
   modal.show();
+}
+
+function openTestModelModal(modelId) {
+  const models = window._registeredModelsCache || [];
+  const model = models.find(m => (m.model_id || m.id || m.modelId) === modelId);
+  if (!model) {
+    alert("Model not found. Refresh the registry list.");
+    return;
+  }
+
+  document.getElementById("testModelId").value = modelId;
+  document.getElementById("testModelName").textContent = model.display_name || model.model_name || modelId;
+  document.getElementById("testPrompt").value = "def add(a, b): return a + b";
+  document.getElementById("testFilePath").value = "sample.py";
+  document.getElementById("testResult").textContent = "";
+
+  const modal = new bootstrap.Modal(document.getElementById("testModelModal"));
+  modal.show();
+}
+
+async function runTestModel() {
+  const modelId = document.getElementById("testModelId").value;
+  const prompt = document.getElementById("testPrompt").value.trim();
+  const filePath = document.getElementById("testFilePath").value.trim() || "sample.py";
+  const resultBox = document.getElementById("testResult");
+
+  if (!modelId || !prompt) {
+    alert("Model ID and prompt are required.");
+    return;
+  }
+
+  resultBox.textContent = "Running test...";
+
+  try {
+    const response = await fetch("/api/models/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_id: modelId, prompt: prompt, file_path: filePath })
+    });
+    const data = await response.json();
+    if (!response.ok || data.success === false) {
+      throw new Error(data.error || "Test failed");
+    }
+    resultBox.textContent = JSON.stringify(data.result, null, 2);
+  } catch (e) {
+    resultBox.textContent = `Error: ${e.message}`;
+  }
 }
 
 function parseJsonField(value, fieldName) {

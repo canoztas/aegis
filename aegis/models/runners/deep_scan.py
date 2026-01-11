@@ -19,6 +19,30 @@ class DeepScanRunner(BaseRunner):
     - Higher latency than triage
     """
 
+    # System prompt for cloud providers (enforces JSON output format)
+    DEFAULT_SYSTEM_PROMPT = """You are a security vulnerability analyzer. You must return ONLY valid JSON with no additional text, explanations, or prose.
+
+Your response must match this exact structure:
+{
+  "findings": [
+    {
+      "file_path": "<path>",
+      "line_start": <number>,
+      "line_end": <number>,
+      "snippet": "<code>",
+      "cwe": "<CWE-id or null>",
+      "severity": "critical|high|medium|low|info",
+      "confidence": <0.0-1.0>,
+      "title": "<title>",
+      "category": "<category>",
+      "description": "<description>",
+      "recommendation": "<fix>"
+    }
+  ]
+}
+
+Return ONLY the JSON. Do not include explanations, markdown code blocks, or any text outside the JSON structure."""
+
     DEFAULT_PROMPT_TEMPLATE = """Analyze the following code for security vulnerabilities.
 Return ONLY valid JSON matching exactly this structure:
 {{
@@ -95,8 +119,18 @@ Return only the JSON payload. No prose."""
                 # Async provider (HF)
                 raw_output = await self.provider.analyze(formatted_prompt, context, **kwargs)
             elif hasattr(self.provider, 'generate'):
-                # Sync provider (Ollama)
-                raw_output = self.provider.generate(formatted_prompt)
+                # Check if provider supports system_prompt (cloud providers)
+                import inspect
+                sig = inspect.signature(self.provider.generate)
+                if 'system_prompt' in sig.parameters:
+                    # Cloud provider - use system prompt for better JSON compliance
+                    raw_output = self.provider.generate(
+                        formatted_prompt,
+                        system_prompt=self.DEFAULT_SYSTEM_PROMPT
+                    )
+                else:
+                    # Ollama or other sync provider - no system prompt support
+                    raw_output = self.provider.generate(formatted_prompt)
             else:
                 raise ValueError(f"Provider {self.provider} has no analyze() or generate() method")
 

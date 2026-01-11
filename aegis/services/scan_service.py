@@ -8,7 +8,7 @@ from typing import Dict, List, Callable, Any, Optional, Iterable
 from aegis.consensus.engine import ConsensusEngine
 from aegis.data_models import ScanResult, ModelResponse, Finding
 from aegis.events import EventEmitter
-from aegis.models.engine import ModelExecutionEngine
+from aegis.models.engine import ModelExecutionEngine, _candidate_to_finding
 from aegis.models.registry import ModelRegistryV2
 from aegis.utils import chunk_file_lines
 
@@ -117,7 +117,7 @@ class ScanService:
                             batches = list(self._chunk_batches(chunks, batch_size))
                             futures = [
                                 executor.submit(
-                                    engine.run_model_batch_to_findings,
+                                    engine.run_model_batch_sync,
                                     model,
                                     batch,
                                     model.roles[0] if model.roles else None,
@@ -127,12 +127,30 @@ class ScanService:
 
                             for future, batch in zip(futures, batches):
                                 try:
-                                    batch_findings = future.result()
+                                    batch_results = future.result()
                                 except Exception as e:
                                     emitter.warning(f"Batch failed for model {model_id}: {e}", {"model_id": model_id})
                                     continue
 
-                                for chunk_findings in batch_findings:
+                                for result, chunk in zip(batch_results, batch):
+                                    if result.parse_errors:
+                                        raw_snippet = None
+                                        if result.raw_output:
+                                            raw_snippet = str(result.raw_output)
+                                            if len(raw_snippet) > 800:
+                                                raw_snippet = raw_snippet[:800] + "..."
+                                        emitter.warning(
+                                            "Model parse errors",
+                                            {
+                                                "model_id": model_id,
+                                                "file_path": chunk.get("file_path"),
+                                                "line_start": chunk.get("line_start"),
+                                                "line_end": chunk.get("line_end"),
+                                                "errors": result.parse_errors,
+                                                "raw_snippet": raw_snippet,
+                                            },
+                                        )
+                                    chunk_findings = [_candidate_to_finding(c) for c in result.findings]
                                     per_model_findings[model_id].extend(chunk_findings)
                                     for finding in chunk_findings:
                                         emitter.finding_emitted(finding.to_dict(), model_id)
