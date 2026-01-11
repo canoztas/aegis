@@ -62,6 +62,9 @@ class ScanService:
         with app.app_context():
             emitter = EventEmitter(scan_id)
             try:
+                processed_files: set[str] = set()
+                cancel_requested = False
+
                 debug_scan_log(
                     f"[scan-debug] scan start: {scan_id} models={model_ids} files={len(source_files)} "
                     f"chunk_size={chunk_size}"
@@ -75,18 +78,6 @@ class ScanService:
                     except Exception as e:
                         print(f"Warning: Failed to mark scan running in database: {e}")
 
-                if self._is_cancelled(scan_id):
-                    debug_scan_log(f"[scan-debug] scan cancelled before execution: {scan_id}")
-                    self.scan_state.status[scan_id] = "cancelled"
-                    emitter.emit("cancelled", {"message": "Scan cancelled before execution"})
-                    if self.use_v2:
-                        scan_repo, _ = self.get_v2_repositories()
-                        try:
-                            scan_repo.update_status(scan_id, "cancelled")
-                        except Exception as e:
-                            print(f"Warning: Failed to mark scan cancelled in database: {e}")
-                    return
-
                 registry = ModelRegistryV2()
                 engine = ModelExecutionEngine(registry)
                 consensus = ConsensusEngine()
@@ -97,7 +88,75 @@ class ScanService:
                 total_work_items = len(model_ids) * len(source_files)
                 processed_items = 0
 
+                def finalize_scan(status: str, strategy_override: Optional[str] = None) -> None:
+                    nonlocal processed_files, model_responses
+                    effective_strategy = strategy_override or (consensus_strategy or "union")
+                    if status == "cancelled":
+                        effective_strategy = "union"
+
+                    try:
+                        consensus_findings = consensus.merge(
+                            model_responses,
+                            strategy=effective_strategy,
+                        )
+                    except Exception as e:
+                        emitter.warning("Consensus failed", {"error": str(e)})
+                        consensus_findings = []
+
+                    scan_result = ScanResult(
+                        scan_id=scan_id,
+                        consensus_findings=consensus_findings,
+                        per_model_findings=per_model_findings,
+                        scan_metadata={
+                            "models": model_ids,
+                            "strategy": consensus_strategy,
+                            "effective_strategy": effective_strategy,
+                            "files_scanned": len(processed_files) or len(source_files),
+                            "total_findings": len(consensus_findings),
+                            "status": status,
+                            "partial": status != "completed",
+                        },
+                        source_files=source_files,
+                    )
+
+                    self.scan_state.results[scan_id] = scan_result
+                    self.scan_state.status[scan_id] = status
+
+                    if self.use_v2:
+                        scan_repo, finding_repo = self.get_v2_repositories()
+                        try:
+                            scan_repo.update_status(scan_id, status)
+                            scan_repo.update_progress(
+                                scan_id,
+                                total_files=len(source_files),
+                                processed_files=len(processed_files) or len(source_files),
+                            )
+
+                            finding_repo.create_batch(
+                                scan_result.consensus_findings,
+                                scan_id,
+                                is_consensus=True,
+                            )
+                            for model_id, findings in scan_result.per_model_findings.items():
+                                finding_repo.create_batch(
+                                    findings,
+                                    scan_id,
+                                    model_id=model_id,
+                                    is_consensus=False,
+                                )
+                        except Exception as e:
+                            print(f"Warning: Failed to persist scan to database: {e}")
+
+                if self._is_cancelled(scan_id):
+                    debug_scan_log(f"[scan-debug] scan cancelled before execution: {scan_id}")
+                    emitter.emit("cancelled", {"message": "Scan cancelled before execution"})
+                    finalize_scan("cancelled")
+                    return
+
                 for model_id in model_ids:
+                    if cancel_requested or self._is_cancelled(scan_id):
+                        cancel_requested = True
+                        break
                     model = registry.get_model(model_id)
                     if not model:
                         emitter.warning(f"Model '{model_id}' not found", {"model_id": model_id})
@@ -130,6 +189,10 @@ class ScanService:
                     model_start_time = time.time()
 
                     for file_path, content in source_files.items():
+                        if cancel_requested or self._is_cancelled(scan_id):
+                            cancel_requested = True
+                            break
+                        processed_files.add(file_path)
                         processed_items += 1
                         progress_pct = int((processed_items / total_work_items) * 100)
                         file_name = os.path.basename(file_path)
@@ -177,6 +240,9 @@ class ScanService:
                             ]
 
                             for future, batch in zip(futures, batches):
+                                if cancel_requested or self._is_cancelled(scan_id):
+                                    cancel_requested = True
+                                    break
                                 try:
                                     batch_results = future.result()
                                 except Exception as e:
@@ -211,6 +277,9 @@ class ScanService:
                                     for finding in chunk_findings:
                                         emitter.finding_emitted(finding.to_dict(), model_id)
 
+                        if cancel_requested:
+                            break
+
                     # Emit step and model completed events
                     model_duration_ms = int((time.time() - model_start_time) * 1000)
                     model_findings_count = len(per_model_findings[model_id])
@@ -233,6 +302,15 @@ class ScanService:
                             usage={},
                         )
                     )
+
+                    if cancel_requested:
+                        break
+
+                if cancel_requested or self._is_cancelled(scan_id):
+                    debug_scan_log(f"[scan-debug] scan cancelled during execution: {scan_id}")
+                    emitter.emit("cancelled", {"message": "Scan cancelled"})
+                    finalize_scan("cancelled")
+                    return
 
                 if not model_responses:
                     raise ValueError("No runnable models found for scan")
@@ -269,14 +347,8 @@ class ScanService:
 
                 if self._is_cancelled(scan_id):
                     debug_scan_log(f"[scan-debug] scan cancelled after execution: {scan_id}")
-                    self.scan_state.status[scan_id] = "cancelled"
                     emitter.emit("cancelled", {"message": "Scan cancelled"})
-                    if self.use_v2:
-                        scan_repo, _ = self.get_v2_repositories()
-                        try:
-                            scan_repo.update_status(scan_id, "cancelled")
-                        except Exception as e:
-                            print(f"Warning: Failed to mark scan cancelled in database: {e}")
+                    finalize_scan("cancelled")
                     return
 
                 self.scan_state.results[scan_id] = scan_result
