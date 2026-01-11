@@ -101,13 +101,23 @@ class CloudProviderAdapter:
         opts.update(kwargs)
 
         # Run async generate in sync context
-        return asyncio.run(
-            self.provider.generate(
-                prompt=prompt,
-                system_prompt=system_prompt,
-                **opts,
+        # Use a thread pool to avoid "asyncio.run() cannot be called from a running event loop" error
+        # This approach works whether or not an event loop is already running
+        import concurrent.futures
+
+        def _run_async():
+            """Helper to run async code in a fresh event loop."""
+            return asyncio.run(
+                self.provider.generate(
+                    prompt=prompt,
+                    system_prompt=system_prompt,
+                    **opts,
+                )
             )
-        )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_run_async)
+            return future.result()
 
     def close(self):
         """Close provider resources."""
