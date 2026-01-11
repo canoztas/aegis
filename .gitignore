@@ -74,6 +74,14 @@ htmlcov/
 test_*.py
 test_project/
 
+# Scripts (development/migration only)
+scripts/
+*.py.backup
+check_*.py
+migrate_*.py
+fix_*.py
+clean_*.py
+
 # Security
 .env
 config/secrets.py
