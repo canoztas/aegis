@@ -86,6 +86,7 @@ Uses a dedicated "judge" model to evaluate and merge findings from other models.
 
 ### Weighted (TODO)
 Filters findings based on confidence scores. Configurable threshold.
+
 ---
 
 ## Quick Start
