@@ -50,6 +50,9 @@ class EventType(str, Enum):
     ERROR = "error"
     WARNING = "warning"
 
+    # Cancellation events
+    CANCELLED = "cancelled"
+
 
 @dataclass
 class Event:
@@ -221,6 +224,7 @@ class EventBus:
             EventType.CHUNK_COMPLETED: "chunk_completed",
             EventType.ERROR: "error",
             EventType.WARNING: "warning",
+            EventType.CANCELLED: "cancelled",
         }
         # Handle custom events (like "cancelled") that aren't in EventType enum
         return mapping.get(event_type, event_type.value if hasattr(event_type, 'value') else event_type)
@@ -290,14 +294,23 @@ class EventEmitter:
         self.scan_id = scan_id
         self.event_bus = event_bus or get_event_bus()
 
-    def emit(self, event_type: EventType, data: Optional[Dict[str, Any]] = None):
+    def emit(self, event_type, data: Optional[Dict[str, Any]] = None):
         """
         Emit an event.
 
         Args:
-            event_type: Type of event
+            event_type: Type of event (EventType enum or string)
             data: Event data (optional)
         """
+        # Convert string to EventType if needed
+        if isinstance(event_type, str):
+            try:
+                event_type = EventType(event_type)
+            except ValueError:
+                # If not a valid EventType, log warning and skip
+                logger.warning(f"Unknown event type: {event_type}")
+                return
+        
         event = Event(
             type=event_type,
             scan_id=self.scan_id,
