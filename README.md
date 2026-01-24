@@ -131,6 +131,52 @@ Open: **http://localhost:5000**
 
 ---
 
+## Model Catalog
+
+Pre-configured models available in the UI catalog:
+
+### HuggingFace Models
+
+| Model | Type | Role | Hardware |
+|-------|------|------|----------|
+| **CodeBERT Insecure Detector** | Classifier | Triage | CPU |
+| **CodeBERT PrimeVul-BigVul** | Classifier | Triage | CPU |
+| **VulBERTa MLP Devign** | Classifier (C/C++) | Triage | CPU |
+| **UnixCoder PrimeVul-BigVul** | Classifier | Triage | CPU |
+| **Qwen 2.5 0.5B Instruct** | Generative | Triage/Deep | CPU |
+| **CodeAstra 7B** | Generative | Deep Scan | GPU |
+| **Phi-3.5 Mini Instruct** | Generative | Deep Scan | GPU |
+| **DeepSeek Coder V2 Lite** | Generative | Deep Scan | GPU |
+| **StarCoder2 15B Instruct** | Generative | Deep Scan | GPU |
+
+### Cloud Models (API Key Required)
+
+| Model | Provider | Role |
+|-------|----------|------|
+| **GPT-4o** | OpenAI | Deep Scan, Judge |
+| **GPT-4o Mini** | OpenAI | Triage, Deep Scan |
+| **Claude Sonnet 4** | Anthropic | Deep Scan, Judge |
+| **Gemini 1.5 Pro** | Google | Deep Scan |
+| **Gemini 1.5 Flash** | Google | Triage, Deep Scan |
+
+### Ollama Models (Requires Ollama)
+
+| Model | Role |
+|-------|------|
+| **Qwen 2.5 Coder 7B** | Deep Scan |
+| **Llama 3.2** | Deep Scan |
+| **CodeLlama 7B** | Deep Scan |
+| **Mistral 7B** | Deep Scan |
+| **DeepSeek Coder 6.7B** | Deep Scan |
+
+### Classic ML Models
+
+| Model | Type | Role | Hardware |
+|-------|------|------|----------|
+| **Kaggle RF C-Functions** | Random Forest (C/C++) | Triage | CPU |
+
+---
+
 ## Using Models
 
 ### Ollama (Local LLMs)
@@ -148,27 +194,17 @@ Open: **http://localhost:5000**
 2. Browse the **Model Catalog** for pre-configured models
 3. Click **Install** to download and register
 
-**Available Models**:
-- **CodeBERT Insecure Classifier** - Fast triage classifier
-- **VulBERTa** - C/C++ vulnerability detector
-- **UnixCoder** - Multi-language vulnerability classifier
-- **Qwen 2.5 Coder** - Code-specialized LLM
-
 ### Cloud LLMs (OpenAI, Anthropic, Google)
 
 1. In Aegis UI → **Models** → **CLOUD**
 2. Select provider and model from the catalog
 3. Click **Add** (requires API key in `.env`)
 
-**Supported**: GPT-4o, Claude 3.5 Sonnet, Gemini 1.5 Flash, and more
-
 ### Classic ML Models (sklearn)
 
 1. In Aegis UI → **Models** → **ML MODELS**
 2. Click **Install** on available presets
 3. Model downloads automatically
-
-**Available**: Kaggle RF C-Functions Predictor (Random Forest for C/C++ vulnerability detection)
 
 ---
 
