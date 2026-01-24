@@ -97,7 +97,6 @@ pip install -r requirements/requirements.txt
 ```
 
 **Installation Options:**
-- **Minimal** (cloud only): `pip install -r requirements/requirements-minimal.txt`
 - **Standard** (CPU): `pip install -r requirements/requirements.txt`
 - **GPU** (CUDA): `pip install -r requirements/requirements-gpu.txt`
 
