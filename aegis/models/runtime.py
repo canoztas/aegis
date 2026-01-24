@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import logging
 from typing import Any, Dict, List, Optional
 
+from aegis.utils import resolve_device, resolve_dtype, _detect_cuda_available
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,13 +27,6 @@ class RuntimeSpec:
     require_device: Optional[str]
 
 
-def _detect_cuda() -> bool:
-    try:
-        import torch
-
-        return bool(hasattr(torch, "cuda") and torch.cuda.is_available())
-    except Exception:
-        return False
 
 
 def _normalize_list(value: Any, default: List[str]) -> List[str]:
@@ -89,50 +84,24 @@ def resolve_runtime(settings: Dict[str, Any], cuda_available: Optional[bool] = N
     )
 
     if cuda_available is None:
-        cuda_available = _detect_cuda()
+        cuda_available = _detect_cuda_available()
 
-    if require_device:
-        if require_device.startswith("cuda") and not cuda_available:
-            raise RuntimeConfigError("CUDA required but not available on this host.")
-
-    device = None
-    if device_override:
-        if isinstance(device_override, str) and device_override.lower() in ("gpu", "cuda"):
-            device_override = "cuda"
-        device = str(device_override)
-        if device.startswith("cuda") and not cuda_available:
-            if allow_fallback and not require_device:
-                logger.warning("CUDA requested but unavailable. Falling back to CPU.")
-                device = "cpu"
-            else:
-                raise RuntimeConfigError("CUDA requested but not available on this host.")
-    else:
-        for pref in device_preference:
-            pref_str = str(pref).lower()
-            if pref_str in ("gpu", "cuda") and cuda_available:
-                device = "cuda"
-                break
-            if pref_str.startswith("cuda") and cuda_available:
-                device = str(pref)
-                break
-            if pref_str == "cpu":
-                device = "cpu"
-                break
-        if not device:
-            device = "cpu"
+    # Use unified device resolution
+    device = resolve_device(
+        device_preference=device_preference,
+        env_override=device_override,
+        require_device=require_device,
+        allow_fallback=allow_fallback,
+    )
 
     if device.startswith("cpu") and device_map:
         if not runtime.get("device_map_on_cpu", False):
             device_map = None
 
+    # Use unified dtype resolution
     if dtype:
-        dtype = str(dtype).lower()
-        if device.startswith("cpu") and dtype in ("bf16", "bfloat16", "fp16", "float16"):
-            if runtime.get("allow_half_cpu", False):
-                dtype = "fp16" if dtype in ("fp16", "float16") else "bf16"
-            else:
-                logger.warning("Half-precision requested on CPU. Falling back to fp32.")
-                dtype = "fp32"
+        allow_half_cpu = runtime.get("allow_half_cpu", False)
+        dtype = resolve_dtype(device, dtype, allow_half_cpu=allow_half_cpu)
 
     if quantization:
         quantization = str(quantization).lower()

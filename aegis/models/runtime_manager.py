@@ -69,7 +69,8 @@ class ModelRuntime:
                 from aegis.models.cost_tracker import DEFAULT_COST_TRACKER
 
                 # Configure rate limiter
-                provider_type = self.model.provider_id or self.model.model_type.value.replace("_cloud", "")
+                model_type_str = self.model.model_type.value if hasattr(self.model.model_type, 'value') else self.model.model_type
+                provider_type = self.model.provider_id or model_type_str.replace("_cloud", "")
                 custom_rpm = self.settings.get("rate_limit", {}).get("rpm")
 
                 configure_rate_limiter(
@@ -91,13 +92,18 @@ class ModelRuntime:
         self.last_used = time.time()
 
     def _build_runner(self, role: ModelRole):
+        # Include model info in runner config for auto-detection features
+        runner_config = dict(self.settings)
+        runner_config["model_name"] = self.model.model_name
+        runner_config["model_id"] = self.model.model_id
+
         if role == ModelRole.TRIAGE:
-            return TriageRunner(self.provider, self.parser, config=self.settings)
+            return TriageRunner(self.provider, self.parser, config=runner_config)
         if role == ModelRole.JUDGE:
-            return JudgeRunner(self.provider, self.parser, config=self.settings)
+            return JudgeRunner(self.provider, self.parser, config=runner_config)
         if role == ModelRole.EXPLAIN:
-            return ExplainRunner(self.provider, self.parser, config=self.settings)
-        return DeepScanRunner(self.provider, self.parser, config=self.settings)
+            return ExplainRunner(self.provider, self.parser, config=runner_config)
+        return DeepScanRunner(self.provider, self.parser, config=runner_config)
 
     def _normalize_role(self, role: Any) -> ModelRole:
         if isinstance(role, ModelRole):
@@ -221,7 +227,8 @@ class ModelRuntime:
                 output_tokens = len(str(result.findings)) // 4
 
             # Calculate cost
-            provider_type = self.model.provider_id or self.model.model_type.value.replace("_cloud", "")
+            model_type_str = self.model.model_type.value if hasattr(self.model.model_type, 'value') else self.model.model_type
+            provider_type = self.model.provider_id or model_type_str.replace("_cloud", "")
             cost_usd = 0.0
 
             if provider_type == "openai":
@@ -324,6 +331,312 @@ class ModelRuntimeManager:
             for runtime in self._runtimes.values():
                 runtime.close()
             self._runtimes.clear()
+
+    def warmup_model(self, model: ModelRecord, dummy_input: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Pre-load a model and run warmup inference to compile CUDA kernels.
+
+        Args:
+            model: ModelRecord to warm up
+            dummy_input: Optional test input for warmup inference
+
+        Returns:
+            Dict with warmup results including device, VRAM, load times
+        """
+        result = {
+            "model_id": model.model_id,
+            "success": False,
+            "cached": False,
+            "device": None,
+            "vram_mb": 0,
+            "load_time_ms": 0,
+            "warmup_time_ms": 0,
+            "error": None,
+        }
+
+        try:
+            key = self._runtime_key(model)
+
+            with self._lock:
+                # Check if already cached
+                existing = self._runtimes.get(key)
+                if existing:
+                    result["cached"] = True
+                    # If provider supports warmup, run it anyway to get telemetry
+                    if hasattr(existing.provider, "warmup"):
+                        warmup_result = existing.provider.warmup(dummy_input)
+                        result.update({
+                            "success": warmup_result.get("success", True),
+                            "device": warmup_result.get("device"),
+                            "vram_mb": warmup_result.get("vram_mb", 0),
+                            "warmup_time_ms": warmup_result.get("warmup_time_ms", 0),
+                            "error": warmup_result.get("error"),
+                        })
+                    else:
+                        result["success"] = True
+                        if existing.telemetry:
+                            result["device"] = existing.telemetry.get("device")
+                            result["vram_mb"] = existing.telemetry.get("vram_mb", 0)
+                    return result
+
+            # Create runtime (this initializes the provider)
+            runtime = self.get_runtime(model)
+            result["load_time_ms"] = runtime.provider_load_time_ms
+
+            # Run warmup if provider supports it
+            if hasattr(runtime.provider, "warmup"):
+                warmup_result = runtime.provider.warmup(dummy_input)
+                result.update({
+                    "success": warmup_result.get("success", False),
+                    "device": warmup_result.get("device"),
+                    "vram_mb": warmup_result.get("vram_mb", 0),
+                    "warmup_time_ms": warmup_result.get("warmup_time_ms", 0),
+                    "error": warmup_result.get("error"),
+                })
+            else:
+                # Provider doesn't support warmup, but we've created the runtime
+                result["success"] = True
+                if runtime.telemetry:
+                    result["device"] = runtime.telemetry.get("device")
+                    result["vram_mb"] = runtime.telemetry.get("vram_mb", 0)
+
+            logger.info(
+                f"Model warmup complete: {model.model_id} "
+                f"(device={result['device']}, vram={result['vram_mb']}MB, "
+                f"load={result['load_time_ms']}ms, warmup={result['warmup_time_ms']}ms)"
+            )
+
+        except Exception as e:
+            result["error"] = str(e)
+            logger.error(f"Model warmup failed for {model.model_id}: {e}")
+
+        return result
+
+    def unload_model(self, model_id: str, clear_cuda_cache: bool = True) -> Dict[str, Any]:
+        """
+        Unload a model from memory to free GPU/CPU resources.
+
+        Args:
+            model_id: Model ID to unload
+            clear_cuda_cache: If True, clear CUDA cache after unload
+
+        Returns:
+            Dict with unload results
+        """
+        result = {
+            "model_id": model_id,
+            "success": False,
+            "freed_vram_mb": 0,
+            "runtimes_removed": 0,
+            "error": None,
+        }
+
+        try:
+            with self._lock:
+                keys = [k for k in self._runtimes.keys() if k.startswith(f"{model_id}:")]
+
+                for key in keys:
+                    runtime = self._runtimes.pop(key, None)
+                    if runtime:
+                        # Call provider unload if available
+                        if hasattr(runtime.provider, "unload"):
+                            unload_result = runtime.provider.unload(clear_cuda_cache=clear_cuda_cache)
+                            result["freed_vram_mb"] += unload_result.get("freed_vram_mb", 0)
+                        else:
+                            runtime.close()
+                        result["runtimes_removed"] += 1
+
+            result["success"] = True
+            logger.info(
+                f"Model unloaded: {model_id} "
+                f"(freed {result['freed_vram_mb']}MB VRAM, "
+                f"{result['runtimes_removed']} runtimes removed)"
+            )
+
+        except Exception as e:
+            result["error"] = str(e)
+            logger.error(f"Model unload failed for {model_id}: {e}")
+
+        return result
+
+    def get_model_status(self, model_id: str) -> Dict[str, Any]:
+        """
+        Get the current status and telemetry for a loaded model.
+
+        Args:
+            model_id: Model ID to check
+
+        Returns:
+            Dict with model status including loaded state, device, VRAM
+        """
+        status = {
+            "model_id": model_id,
+            "loaded": False,
+            "device": None,
+            "vram_mb": 0,
+            "last_used": None,
+            "runtime_count": 0,
+        }
+
+        with self._lock:
+            keys = [k for k in self._runtimes.keys() if k.startswith(f"{model_id}:")]
+            status["runtime_count"] = len(keys)
+
+            if keys:
+                status["loaded"] = True
+                # Get telemetry from first runtime
+                runtime = self._runtimes.get(keys[0])
+                if runtime:
+                    status["last_used"] = runtime.last_used
+
+                    # Try to get current telemetry
+                    if hasattr(runtime.provider, "get_telemetry"):
+                        try:
+                            telemetry = runtime.provider.get_telemetry()
+                            status["device"] = telemetry.get("device")
+                            status["vram_mb"] = telemetry.get("vram_mb", 0)
+                        except Exception:
+                            pass
+
+                    # Fallback to cached telemetry
+                    if not status["device"] and runtime.telemetry:
+                        status["device"] = runtime.telemetry.get("device")
+                        status["vram_mb"] = runtime.telemetry.get("vram_mb", 0)
+
+        return status
+
+    def list_loaded_models(self) -> List[Dict[str, Any]]:
+        """
+        List all currently loaded models with their status.
+
+        Returns:
+            List of model status dictionaries
+        """
+        models = []
+        seen_model_ids = set()
+
+        with self._lock:
+            for key, runtime in self._runtimes.items():
+                model_id = runtime.model.model_id
+                if model_id in seen_model_ids:
+                    continue
+                seen_model_ids.add(model_id)
+
+                # model_type may be enum or string depending on pydantic config
+                model_type = runtime.model.model_type
+                if hasattr(model_type, 'value'):
+                    model_type = model_type.value
+
+                status = {
+                    "model_id": model_id,
+                    "model_name": runtime.model.model_name,
+                    "model_type": model_type,
+                    "device": None,
+                    "vram_mb": 0,
+                    "last_used": runtime.last_used,
+                }
+
+                if runtime.telemetry:
+                    status["device"] = runtime.telemetry.get("device")
+                    status["vram_mb"] = runtime.telemetry.get("vram_mb", 0)
+
+                models.append(status)
+
+        return models
+
+    def get_gpu_info(self) -> Dict[str, Any]:
+        """
+        Get GPU memory information.
+
+        Returns:
+            Dict with total_vram_mb, used_vram_mb, free_vram_mb, gpu_name
+        """
+        info = {
+            "available": False,
+            "gpu_name": None,
+            "total_vram_mb": 0,
+            "used_vram_mb": 0,
+            "free_vram_mb": 0,
+        }
+
+        try:
+            import torch
+            if torch.cuda.is_available():
+                info["available"] = True
+                info["gpu_name"] = torch.cuda.get_device_name(0)
+
+                # Get memory info
+                total = torch.cuda.get_device_properties(0).total_memory
+                allocated = torch.cuda.memory_allocated(0)
+                reserved = torch.cuda.memory_reserved(0)
+
+                info["total_vram_mb"] = int(total / (1024 * 1024))
+                info["used_vram_mb"] = int(allocated / (1024 * 1024))
+                info["reserved_vram_mb"] = int(reserved / (1024 * 1024))
+                info["free_vram_mb"] = info["total_vram_mb"] - info["used_vram_mb"]
+        except Exception as e:
+            logger.debug(f"Failed to get GPU info: {e}")
+
+        return info
+
+    def is_model_cached(self, model: ModelRecord) -> Dict[str, Any]:
+        """
+        Check if a HuggingFace model is already downloaded to cache.
+
+        This allows the UI to show download progress when a model needs to be
+        downloaded before scanning.
+
+        Args:
+            model: ModelRecord to check
+
+        Returns:
+            Dict with: cached (bool), size_mb (int estimate), model_type (str)
+        """
+        result = {
+            "model_id": model.model_id,
+            "cached": True,  # Assume cached for non-HF models
+            "size_mb": 0,
+            "model_type": str(model.model_type.value if hasattr(model.model_type, 'value') else model.model_type),
+            "needs_download": False,
+        }
+
+        # Only check HF local models
+        if model.model_type != ModelType.HF_LOCAL:
+            return result
+
+        try:
+            # Check if already loaded in runtime cache
+            key = self._runtime_key(model)
+            with self._lock:
+                if key in self._runtimes:
+                    result["cached"] = True
+                    return result
+
+            # Create a temporary provider to check cache status
+            from aegis.providers.hf_local import HFLocalProvider
+
+            settings = model.settings or {}
+            temp_provider = HFLocalProvider(
+                model_id=model.model_name,
+                task_type=settings.get("task_type", "text-classification"),
+                device="cpu",  # Don't actually load on GPU
+                custom_loading=settings.get("custom_loading", False),
+            )
+
+            is_cached = temp_provider.is_model_cached()
+            result["cached"] = is_cached
+            result["needs_download"] = not is_cached
+
+            if not is_cached:
+                # Try to get estimated size
+                result["size_mb"] = temp_provider.get_model_size_estimate()
+
+        except Exception as e:
+            logger.debug(f"Cache check failed for {model.model_id}: {e}")
+            # On error, assume cached to avoid blocking scans
+            result["cached"] = True
+
+        return result
 
 
 DEFAULT_RUNTIME_MANAGER = ModelRuntimeManager()

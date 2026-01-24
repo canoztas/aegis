@@ -38,6 +38,23 @@ providers:
 
 # Model Definitions
 models:
+  # HuggingFace Local - Fast Triage Classifier
+  - provider: huggingface
+    model_id: "hf:codebert-insecure"
+    display_name: "CodeBERT Insecure Code Detector"
+    model_name: "mrm8488/codebert-base-finetuned-detect-insecure-code"
+    role: triage
+    config:
+      weight: 0.8
+      supports_streaming: false
+      supports_json: false
+      task_type: "text-classification"
+      parser_id: "classification"
+      runtime:
+        device_preference: ["cuda", "cpu"]
+        dtype: "fp32"
+        max_concurrency: 4
+
   # Ollama Models - Scan Role
   - provider: ollama
     model_id: "ollama:qwen2.5-coder:7b"

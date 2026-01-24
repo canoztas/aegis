@@ -1,7 +1,7 @@
 # Development Requirements
-# Install with: pip install -r requirements-dev.txt
+# Install with: pip install -r requirements/requirements-dev.txt
 
-# Include base requirements
+# Include full requirements (CPU)
 -r requirements.txt
 
 # Testing
@@ -15,6 +15,6 @@ flake8>=6.0.0
 mypy>=1.5.0
 isort>=5.12.0
 
-# Documentation
-sphinx>=7.0.0
-sphinx-rtd-theme>=1.3.0
+# Type stubs
+types-requests>=2.31.0
+types-PyYAML>=6.0.0

@@ -1,4 +1,4 @@
-"""Model Registry V2 - Enhanced model lifecycle management."""
+"""Model Registry - Enhanced model lifecycle management."""
 
 import json
 import logging
@@ -12,14 +12,15 @@ from aegis.models.schema import (
     ModelRecord,
     ModelStatus,
     ModelAvailability,
+    LEGACY_ROLE_MAPPING,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class ModelRegistryV2:
+class ModelRegistry:
     """
-    Enhanced model registry with support for:
+    Model registry with support for:
     - Multiple roles per model
     - Parser assignment
     - Model type tracking
@@ -89,6 +90,12 @@ class ModelRegistryV2:
         Raises:
             ValueError: If roles list is empty or invalid provider
         """
+        # Trim whitespace from string fields to prevent matching issues
+        model_id = model_id.strip()
+        provider_id = provider_id.strip()
+        model_name = model_name.strip()
+        display_name = display_name.strip()
+
         if not roles:
             raise ValueError("Model must have at least one role")
 
@@ -194,16 +201,20 @@ class ModelRegistryV2:
 
     def get_model(self, model_id: str) -> Optional[ModelRecord]:
         """Get a registered model by ID."""
+        # Trim the input model_id
+        model_id_clean = model_id.strip() if model_id else model_id
+
         with self.db.get_connection() as conn:
             cursor = conn.cursor()
+            # Try exact match first, then match with TRIM for legacy data with trailing spaces
             cursor.execute(
                 """
                 SELECT m.*, p.name as provider_name, p.config_json as provider_config_json, p.base_url as provider_base_url
                 FROM models m
                 JOIN providers p ON m.provider_id = p.id
-                WHERE m.model_id = ?
+                WHERE m.model_id = ? OR TRIM(m.model_id) = ?
                 """,
-                (model_id,),
+                (model_id_clean, model_id_clean),
             )
             row = cursor.fetchone()
 
@@ -345,15 +356,6 @@ class ModelRegistryV2:
                 return source[key]
             except Exception:
                 return default
-        # Mapping for legacy role values to new ModelRole enums
-        ROLE_MAPPING = {
-            "scan": ModelRole.DEEP_SCAN,  # Old 'scan' maps to deep_scan
-            "triage": ModelRole.TRIAGE,
-            "deep_scan": ModelRole.DEEP_SCAN,
-            "judge": ModelRole.JUDGE,
-            "explain": ModelRole.EXPLAIN,
-            "custom": ModelRole.CUSTOM,
-        }
 
         # Parse roles from JSON
         roles_json = _get_value(row_data, "roles_json") or _get_value(row_data, "role")
@@ -375,7 +377,7 @@ class ModelRegistryV2:
                 roles.append(ModelRole(r))
             except ValueError:
                 # Fall back to mapping for legacy values
-                mapped_role = ROLE_MAPPING.get(r.lower())
+                mapped_role = LEGACY_ROLE_MAPPING.get(r.lower())
                 if mapped_role:
                     roles.append(mapped_role)
                 else:
@@ -424,3 +426,7 @@ class ModelRegistryV2:
         if model_type == ModelType.OPENAI_COMPATIBLE:
             return "llm"
         return "classic"
+
+
+# Backward-compatible alias (deprecated, use ModelRegistry)
+ModelRegistryV2 = ModelRegistry

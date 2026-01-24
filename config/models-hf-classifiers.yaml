@@ -1,0 +1,74 @@
+# HuggingFace Classifier Models for Aegis
+# These are fast, local classifiers for triage and CWE detection
+
+models:
+  # CodeBERT Insecure Code Detector (Fast Triage)
+  - model_id: "hf:codebert-insecure"
+    model_type: "hf_local"
+    provider_id: "huggingface"
+    model_name: "mrm8488/codebert-base-finetuned-detect-insecure-code"
+    display_name: "CodeBERT Insecure Code Detector"
+    roles: ["triage"]
+    parser_id: "classification"
+    is_enabled: true
+    settings:
+      task_type: "text-classification"
+      runtime:
+        device_preference: ["cuda", "cpu"]
+        dtype: "fp32"  # fp32 for CPU compatibility
+        quantization: null  # Classification models don't need quantization
+        max_concurrency: 4
+        keep_alive_seconds: 3600  # Keep loaded for 1 hour
+      generation_kwargs: {}
+      # Classification output mapping
+      parser_config:
+        label_map:
+          "INSECURE": "high"
+          "SECURE": "info"
+        confidence_threshold: 0.7
+
+  # CodeBERT Vulnerability Classifier (Alternative)
+  - model_id: "hf:codebert-primevul"
+    model_type: "hf_local"
+    provider_id: "huggingface"
+    model_name: "mahdin70/CodeBERT-PrimeVul-BigVul"
+    display_name: "CodeBERT PrimeVul (CWE Classifier)"
+    roles: ["triage", "cwe_classify"]
+    parser_id: "classification"
+    is_enabled: false  # Disabled by default, enable if needed
+    settings:
+      task_type: "text-classification"
+      runtime:
+        device_preference: ["cuda", "cpu"]
+        dtype: "fp32"
+        quantization: null
+        max_concurrency: 4
+        keep_alive_seconds: 3600
+      generation_kwargs: {}
+      parser_config:
+        label_map: {}  # Model outputs CWE categories directly
+        confidence_threshold: 0.6
+
+  # DistilBERT Security (Lightweight Alternative)
+  - model_id: "hf:distilbert-security"
+    model_type: "hf_local"
+    provider_id: "huggingface"
+    model_name: "ealvaradob/distilbert-base-uncased-finetuned-sst-2-en-finetuned-security"
+    display_name: "DistilBERT Security Classifier"
+    roles: ["triage"]
+    parser_id: "classification"
+    is_enabled: false
+    settings:
+      task_type: "text-classification"
+      runtime:
+        device_preference: ["cuda", "cpu"]
+        dtype: "fp32"
+        quantization: null
+        max_concurrency: 8  # Lightweight, can handle more concurrency
+        keep_alive_seconds: 3600
+      generation_kwargs: {}
+      parser_config:
+        label_map:
+          "POSITIVE": "high"  # Security issue detected
+          "NEGATIVE": "info"   # No security issue
+        confidence_threshold: 0.75

@@ -72,16 +72,26 @@ class HFTextClassificationParser(BaseParser):
         # Determine if suspicious
         is_suspicious = label in [l.upper() for l in positive_labels] and score >= threshold
 
+        # Extract CWE if available (from multi-task models like CodeBERT-PrimeVul)
+        cwe = top_prediction.get("cwe")
+        cwe_score = top_prediction.get("cwe_score")
+
+        # Build triage metadata
+        triage_metadata = {
+            "all_predictions": predictions,
+            "threshold": threshold,
+        }
+        if cwe:
+            triage_metadata["cwe"] = cwe
+            triage_metadata["cwe_score"] = cwe_score
+
         # Create triage signal
         triage_signal = TriageSignal(
             is_suspicious=is_suspicious,
             confidence=score,
-            labels=[label],
+            labels=[label] if not cwe else [label, cwe],
             suspicious_chunks=[context] if is_suspicious else [],
-            metadata={
-                "all_predictions": predictions,
-                "threshold": threshold,
-            },
+            metadata=triage_metadata,
         )
 
         # Optionally create finding if suspicious
@@ -95,20 +105,41 @@ class HFTextClassificationParser(BaseParser):
             else:
                 severity = "low"
 
+            # Extract CWE information if available (from multi-task models)
+            cwe = top_prediction.get("cwe")
+            cwe_score = top_prediction.get("cwe_score")
+            cwe_index = top_prediction.get("cwe_index")
+
+            # Build description with CWE if available
+            if cwe and cwe_score:
+                description = f"Code classified as {label} ({score:.2%}), CWE: {cwe} ({cwe_score:.2%})"
+                category = cwe  # Use CWE as category for better grouping
+            else:
+                description = f"Code classified as {label} with confidence {score:.2%}"
+                category = "potential_vulnerability"
+
+            # Build metadata
+            metadata = {
+                "label": label,
+                "all_predictions": predictions,
+                "source": "hf_classification",
+            }
+            if cwe:
+                metadata["cwe"] = cwe
+                metadata["cwe_score"] = cwe_score
+                metadata["cwe_index"] = cwe_index
+
             finding = FindingCandidate(
                 file_path=context.get("file_path", "unknown"),
                 line_start=context.get("line_start", 1),
                 line_end=context.get("line_end"),
                 snippet=context.get("snippet", ""),
-                category="potential_vulnerability",  # Generic category
+                category=category,
                 severity=severity,
-                description=f"Code classified as {label} with confidence {score:.2%}",
+                description=description,
                 confidence=score,
-                metadata={
-                    "label": label,
-                    "all_predictions": predictions,
-                    "source": "hf_classification",
-                },
+                cwe=cwe,  # Pass CWE to finding
+                metadata=metadata,
             )
             findings.append(finding)
 

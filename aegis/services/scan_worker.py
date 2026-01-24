@@ -1,6 +1,6 @@
 """Background scan worker with persistent queue support."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import queue
 import threading
 from typing import Dict, List, Optional, Any
@@ -11,11 +11,14 @@ from aegis.utils import debug_scan_log
 
 @dataclass
 class ScanJob:
+    """Job for standard scan execution."""
     scan_id: str
     source_files: Optional[Dict[str, str]]
     model_ids: List[str]
     consensus_strategy: str
     judge_model_id: Optional[str] = None
+    # Cascade consensus configuration (only used when consensus_strategy == "cascade")
+    cascade_config: Optional[Dict[str, Any]] = None
 
 
 class ScanWorker:
@@ -61,10 +64,12 @@ class ScanWorker:
             scan_id = scan_data.get("scan_id")
             if not scan_id:
                 continue
-            pipeline_config = scan_data.get("pipeline_config", {}) or {}
-            model_ids = pipeline_config.get("models", []) or []
+            # Note: pipeline_config is a legacy DB column name that stores scan configuration
+            scan_config = scan_data.get("pipeline_config", {}) or {}
+            model_ids = scan_config.get("models", []) or []
             consensus_strategy = scan_data.get("consensus_strategy", "union")
-            judge_model_id = pipeline_config.get("judge_model_id")
+            judge_model_id = scan_config.get("judge_model_id")
+            cascade_config = scan_config.get("cascade")
 
             if not model_ids:
                 registry = ModelRegistryV2()
@@ -78,6 +83,7 @@ class ScanWorker:
                 model_ids=model_ids,
                 consensus_strategy=consensus_strategy,
                 judge_model_id=judge_model_id,
+                cascade_config=cascade_config,
             ))
 
     def _ensure_scan_state(self, scan_id: str) -> None:
@@ -131,13 +137,22 @@ class ScanWorker:
                 self._queue.task_done()
                 continue
 
-            self.scan_service.run_background(
-                scan_id=job.scan_id,
-                source_files=job.source_files,
-                model_ids=job.model_ids,
-                consensus_strategy=job.consensus_strategy,
-                judge_model_id=job.judge_model_id,
-                app=self._app,
-            )
+            # Check if this is a cascade consensus scan
+            if job.consensus_strategy == "cascade" and job.cascade_config:
+                self.scan_service.run_cascade_background(
+                    scan_id=job.scan_id,
+                    source_files=job.source_files,
+                    cascade_config=job.cascade_config,
+                    app=self._app,
+                )
+            else:
+                self.scan_service.run_background(
+                    scan_id=job.scan_id,
+                    source_files=job.source_files,
+                    model_ids=job.model_ids,
+                    consensus_strategy=job.consensus_strategy,
+                    judge_model_id=job.judge_model_id,
+                    app=self._app,
+                )
             debug_scan_log(f"[scan-debug] scan completed: {job.scan_id}")
             self._queue.task_done()

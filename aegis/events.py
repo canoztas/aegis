@@ -36,6 +36,7 @@ class EventType(str, Enum):
     MODEL_STARTED = "model_started"
     MODEL_COMPLETED = "model_completed"
     MODEL_FAILED = "model_failed"
+    MODEL_DOWNLOADING = "model_downloading"
 
     # Finding events
     FINDING_EMITTED = "finding_emitted"
@@ -217,6 +218,7 @@ class EventBus:
             EventType.MODEL_STARTED: "model_start",
             EventType.MODEL_COMPLETED: "model_completed",
             EventType.MODEL_FAILED: "error",
+            EventType.MODEL_DOWNLOADING: "model_downloading",
             EventType.FINDING_EMITTED: "finding",
             EventType.FINDINGS_MERGED: "findings_merged",
             EventType.PROGRESS_UPDATE: "progress",
@@ -302,21 +304,45 @@ class EventEmitter:
             event_type: Type of event (EventType enum or string)
             data: Event data (optional)
         """
-        # Convert string to EventType if needed
+        # Handle string event types (including custom events like cascade_pass_*)
         if isinstance(event_type, str):
             try:
                 event_type = EventType(event_type)
             except ValueError:
-                # If not a valid EventType, log warning and skip
-                logger.warning(f"Unknown event type: {event_type}")
+                # Custom event type - send directly to SSE without using EventType enum
+                self._emit_custom_event(event_type, data)
                 return
-        
+
         event = Event(
             type=event_type,
             scan_id=self.scan_id,
             data=data or {},
         )
         self.event_bus.publish(event)
+
+    def _emit_custom_event(self, event_type: str, data: Optional[Dict[str, Any]] = None):
+        """
+        Emit a custom event that isn't in the EventType enum.
+        These are sent directly to SSE without going through the EventBus.
+
+        Args:
+            event_type: String event type name
+            data: Event data (optional)
+        """
+        try:
+            from aegis.sse.stream import SSEManager
+            from flask import current_app
+
+            if hasattr(current_app, 'sse_manager'):
+                sse_manager: SSEManager = current_app.sse_manager
+                sse_manager.broadcast(
+                    scan_id=self.scan_id,
+                    event_type=event_type,
+                    data=data or {}
+                )
+                logger.debug(f"Custom event emitted: {event_type} for scan {self.scan_id}")
+        except Exception as e:
+            logger.debug(f"Could not emit custom event {event_type}: {e}")
 
     def pipeline_started(self, pipeline_name: str, pipeline_version: str):
         """Emit pipeline started event."""
@@ -415,6 +441,25 @@ class EventEmitter:
             "model_id": model_id,
             "error": error,
         })
+
+    def model_downloading(self, model_id: str, model_name: str, progress_pct: float,
+                          downloaded_mb: float = 0, total_mb: float = 0, speed_mbps: float = 0,
+                          file_name: str = None):
+        """Emit model downloading progress event."""
+        data = {
+            "model_id": model_id,
+            "model_name": model_name,
+            "progress_pct": progress_pct,
+        }
+        if downloaded_mb > 0:
+            data["downloaded_mb"] = downloaded_mb
+        if total_mb > 0:
+            data["total_mb"] = total_mb
+        if speed_mbps > 0:
+            data["speed_mbps"] = speed_mbps
+        if file_name:
+            data["file_name"] = file_name
+        self.emit(EventType.MODEL_DOWNLOADING, data)
 
     def finding_emitted(self, finding: Dict[str, Any], model_id: str):
         """Emit finding emitted event."""

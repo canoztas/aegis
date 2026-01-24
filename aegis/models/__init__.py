@@ -15,7 +15,7 @@ from aegis.models.schema import (
     FindingCandidate,
     ModelAvailability,
 )
-from aegis.models.registry import ModelRegistryV2
+from aegis.models.registry import ModelRegistry, ModelRegistryV2
 
 __all__ = [
     "ModelType",
@@ -24,5 +24,6 @@ __all__ = [
     "DiscoveredModel",
     "FindingCandidate",
     "ModelAvailability",
-    "ModelRegistryV2",
+    "ModelRegistry",
+    "ModelRegistryV2",  # Deprecated alias, use ModelRegistry
 ]

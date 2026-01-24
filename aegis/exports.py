@@ -17,7 +17,7 @@ def export_sarif(scan_result: ScanResult, base_uri: str = "file:///") -> Dict[st
                 "tool": {
                     "driver": {
                         "name": "Aegis",
-                        "version": "0.2.0",
+                        "version": "1.1.0",
                         "informationUri": "https://github.com/canoztas/aegis",
                         "rules": _build_sarif_rules(scan_result.consensus_findings),
                     }

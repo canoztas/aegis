@@ -50,8 +50,11 @@ DEFAULT_TOOL_REGISTRY = ToolRegistry()
 
 def register_builtin_tools(registry: ToolRegistry = DEFAULT_TOOL_REGISTRY) -> None:
     from aegis.tools.builtin.regex_tool import RegexTool
+    from aegis.tools.builtin.sklearn_tool import SklearnTool, KaggleRFCFunctionsTool
 
     registry.register_class(RegexTool)
+    registry.register_class(SklearnTool)
+    registry.register_class(KaggleRFCFunctionsTool)
 
 
 register_builtin_tools()

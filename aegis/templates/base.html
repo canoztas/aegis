@@ -57,6 +57,12 @@
             </a>
           </li>
           <li class="nav-item">
+            <a class="nav-link px-4 {% if request.endpoint == 'main.gpu_manager_page' %}active text-primary{% endif %}"
+              href="{{ url_for('main.gpu_manager_page') }}">
+              <i class="bi bi-gpu-card me-1"></i>GPU
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link px-4 {% if request.endpoint == 'main.history_page' %}active text-primary{% endif %}"
               href="{{ url_for('main.history_page') }}">
               HISTORY
@@ -105,8 +111,8 @@
   <footer class="mt-auto py-3 border-top border-subtle bg-panel mb-4 pb-4"> <!-- Added bottom margin for Neural Link -->
     <div class="container-fluid px-4 d-flex justify-content-between align-items-center text-muted small"
       style="max-width: 1600px;">
-      <span class="font-monospace">&copy; 2025 AEGIS OF THE VULNERABLE</span>
-      <span class="font-monospace text-secondary opacity-50">V.1.0</span>
+      <span class="font-monospace">&copy; 2026 AEGIS OF THE VULNERABLE</span>
+      <span class="font-monospace text-secondary opacity-50">V.1.1</span>
     </div>
   </footer>
 

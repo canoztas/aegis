@@ -146,6 +146,12 @@
     color: #3fb950;
   }
 
+  .model-status.downloading {
+    background-color: rgba(88, 166, 255, 0.2);
+    color: #58a6ff;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
   .model-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -529,6 +535,7 @@
       eventSource.addEventListener('step_completed', handleStepCompleted);
       eventSource.addEventListener('step_skipped', handleStepSkipped);
       eventSource.addEventListener('step_failed', handleStepFailed);
+      eventSource.addEventListener('model_downloading', handleModelDownloading);
       eventSource.addEventListener('model_start', handleModelStart);
       eventSource.addEventListener('model_completed', handleModelCompleted);
       eventSource.addEventListener('progress', handleProgress);
@@ -537,6 +544,11 @@
       eventSource.addEventListener('warning', handleWarning);
       eventSource.addEventListener('completed', handleCompleted);
       eventSource.addEventListener('error', handleError);
+
+      // Cascade-specific events
+      eventSource.addEventListener('cascade_pass_started', handleCascadePassStarted);
+      eventSource.addEventListener('cascade_pass_completed', handleCascadePassCompleted);
+      eventSource.addEventListener('cascade_pass_skipped', handleCascadePassSkipped);
 
       eventSource.onerror = function (e) {
         logMessage('Connection error, retrying...', 'error');
@@ -623,6 +635,55 @@
       logMessage(`Step failed: ${stepId} - ${error}`, 'error');
     }
 
+    function handleModelDownloading(e) {
+      const data = JSON.parse(e.data);
+      const modelId = data.model_id;
+      const modelName = data.model_name;
+      const progressPct = data.progress_pct || 0;
+      const downloadedMb = data.downloaded_mb || 0;
+      const totalMb = data.total_mb || 0;
+      const speedMbps = data.speed_mbps || 0;
+      const fileName = data.file_name || '';
+
+      // Create or update download status in models
+      if (!models[modelId]) {
+        models[modelId] = {
+          id: modelId,
+          name: modelName,
+          type: 'hf_local',
+          device: 'downloading',
+          vramUsage: 0,
+          loadTime: 0,
+          status: 'downloading',
+          calls: 0,
+          latencies: [],
+          findingsCount: 0,
+          tokens: { input: 0, output: 0 },
+          downloadProgress: progressPct,
+          downloadedMb: downloadedMb,
+          totalMb: totalMb,
+          downloadSpeed: speedMbps
+        };
+      } else {
+        models[modelId].status = 'downloading';
+        models[modelId].downloadProgress = progressPct;
+        models[modelId].downloadedMb = downloadedMb;
+        models[modelId].totalMb = totalMb;
+        models[modelId].downloadSpeed = speedMbps;
+      }
+
+      updateModelsUI();
+
+      // Log download status
+      if (progressPct > 0 && totalMb > 0) {
+        logMessage(`Downloading ${modelName}: ${progressPct.toFixed(0)}% (${downloadedMb.toFixed(1)}/${totalMb.toFixed(1)} MB)`, 'info');
+      } else if (totalMb > 0) {
+        logMessage(`Downloading ${modelName}: ~${totalMb.toFixed(0)} MB`, 'info');
+      } else {
+        logMessage(`Downloading ${modelName}...`, 'info');
+      }
+    }
+
     function handleModelStart(e) {
       const data = JSON.parse(e.data);
       const modelId = data.model_id;
@@ -632,21 +693,32 @@
       const vramUsage = data.vram_mb || 0;
       const loadTime = data.load_time_ms || 0;
 
-      models[modelId] = {
-        id: modelId,
-        name: modelName,
-        type: modelType,
-        device: device,
-        vramUsage: vramUsage,
-        loadTime: loadTime,
-        status: 'running',
-        calls: 0,
-        latencies: [],
-        findingsCount: 0,
-        tokens: { input: 0, output: 0 },
-        quantization: data.quantization || null,
-        precision: data.precision || null
-      };
+      // Update existing model entry if it was downloading, otherwise create new
+      if (models[modelId]) {
+        models[modelId].type = modelType;
+        models[modelId].device = device;
+        models[modelId].vramUsage = vramUsage;
+        models[modelId].loadTime = loadTime;
+        models[modelId].status = 'running';
+        models[modelId].quantization = data.quantization || null;
+        models[modelId].precision = data.precision || null;
+      } else {
+        models[modelId] = {
+          id: modelId,
+          name: modelName,
+          type: modelType,
+          device: device,
+          vramUsage: vramUsage,
+          loadTime: loadTime,
+          status: 'running',
+          calls: 0,
+          latencies: [],
+          findingsCount: 0,
+          tokens: { input: 0, output: 0 },
+          quantization: data.quantization || null,
+          precision: data.precision || null
+        };
+      }
 
       updateModelsUI();
       logMessage(`Model started: ${modelName} on ${device} (${vramUsage}MB VRAM, loaded in ${loadTime}ms)`, 'info');
@@ -742,6 +814,68 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
       const data = JSON.parse(e.data);
       const message = data.message || 'Scan cancelled';
       onCancelled(message);
+    }
+
+    // Cascade event handlers
+    function handleCascadePassStarted(e) {
+      const data = JSON.parse(e.data);
+      const passNum = data.pass_number || 1;
+      const modelsCount = (data.models || []).length;
+      const filesCount = data.files_count || 0;
+      const description = data.description || `Pass ${passNum}`;
+
+      const stepId = `cascade_pass_${passNum}`;
+      steps[stepId] = {
+        id: stepId,
+        kind: 'cascade_pass',
+        status: 'running',
+        startTime: Date.now(),
+        passNumber: passNum,
+        modelsCount: modelsCount,
+        filesCount: filesCount
+      };
+
+      updateStepsUI();
+      logMessage(`Cascade Pass ${passNum} started: ${description} (${modelsCount} models, ${filesCount} files)`, 'info');
+    }
+
+    function handleCascadePassCompleted(e) {
+      const data = JSON.parse(e.data);
+      const passNum = data.pass_number || 1;
+      const filesScanned = data.files_scanned || 0;
+      const filesFlagged = data.files_flagged || 0;
+      const findingsCount = data.findings_count || 0;
+      const duration = data.duration_ms || 0;
+
+      const stepId = `cascade_pass_${passNum}`;
+      if (steps[stepId]) {
+        steps[stepId].status = 'completed';
+        steps[stepId].findingsCount = findingsCount;
+        steps[stepId].duration = duration;
+        steps[stepId].filesScanned = filesScanned;
+        steps[stepId].filesFlagged = filesFlagged;
+      }
+
+      updateStepsUI();
+      const flaggedMsg = passNum === 1 ? `, ${filesFlagged} files flagged` : '';
+      logMessage(`Cascade Pass ${passNum} completed: ${findingsCount} findings, ${filesScanned} files${flaggedMsg} (${duration}ms)`, 'success');
+    }
+
+    function handleCascadePassSkipped(e) {
+      const data = JSON.parse(e.data);
+      const passNum = data.pass_number || 2;
+      const reason = data.reason || 'No findings to process';
+
+      const stepId = `cascade_pass_${passNum}`;
+      if (!steps[stepId]) {
+        steps[stepId] = { id: stepId, kind: 'cascade_pass', status: 'skipped' };
+      } else {
+        steps[stepId].status = 'skipped';
+      }
+      steps[stepId].skipReason = reason;
+
+      updateStepsUI();
+      logMessage(`Cascade Pass ${passNum} skipped: ${reason}`, 'warning');
     }
 
     function onCompleted(data) {
@@ -893,11 +1027,19 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
 
     function getStepMeta(step) {
       if (step.status === 'running') {
+        if (step.kind === 'cascade_pass') {
+          return `<span class="text-primary">Running... (${step.modelsCount || 0} models, ${step.filesCount || 0} files)</span>`;
+        }
         return `<span class="text-primary">Running...</span>`;
       } else if (step.status === 'completed') {
+        if (step.kind === 'cascade_pass') {
+          const flaggedInfo = step.filesFlagged !== undefined ? `, ${step.filesFlagged} flagged` : '';
+          return `Pass ${step.passNumber} | ${step.findingsCount || 0} findings | ${step.filesScanned || 0} files${flaggedInfo} | ${step.duration || 0}ms`;
+        }
         return `${step.kind} | ${step.findingsCount || 0} findings | ${step.duration || 0}ms`;
       } else if (step.status === 'skipped') {
-        return `<span class="text-muted">Skipped</span>`;
+        const reason = step.skipReason ? `: ${step.skipReason}` : '';
+        return `<span class="text-muted">Skipped${reason}</span>`;
       } else if (step.status === 'failed') {
         return `<span class="text-danger">Failed: ${step.error}</span>`;
       }
@@ -924,7 +1066,11 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
         const isCloud = model.type && model.type.includes('cloud');
 
         let deviceBadge = '';
-        if (model.device && model.device !== 'unknown') {
+        if (model.status === 'downloading') {
+          deviceBadge = `<span
+  class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25"
+  style="font-size: 0.7rem;"><span class="spinner" style="width: 10px; height: 10px; border-width: 1px; margin-right: 4px;"></span>DOWNLOADING</span>`;
+        } else if (model.device && model.device !== 'unknown') {
           const deviceColor = model.device.includes('cuda') ? 'success' :
             model.device.includes('mps') ? 'info' :
               'secondary';
@@ -958,6 +1104,22 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
     </div>
     <span class="model-status ${model.status}">${model.status}</span>
   </div>
+  ${model.status === 'downloading' ? `
+  <div class="model-stats" style="flex-direction: column;">
+    <div class="mb-2">
+      <div class="progress-bar-container" style="height: 6px;">
+        <div class="progress-bar-fill" style="width: ${model.downloadProgress || 0}%;"></div>
+      </div>
+      <div class="d-flex justify-content-between mt-1" style="font-size: 0.75rem; color: var(--text-secondary);">
+        <span>${model.downloadProgress ? model.downloadProgress.toFixed(0) + '%' : 'Starting...'}</span>
+        ${model.totalMb ? `<span>~${model.totalMb.toFixed(0)} MB</span>` : ''}
+      </div>
+    </div>
+    <div style="font-size: 0.75rem; color: var(--text-secondary);">
+      Downloading model weights from Hugging Face Hub...
+    </div>
+  </div>
+  ` : `
   <div class="model-stats" style="grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));">
     <div class="model-stat">
       <span class="model-stat-label">Calls</span>
@@ -996,6 +1158,7 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
     </div>
     ` : ''}
   </div>
+  `}
   ${isHF || isCloud ? `
   <div class="mt-2 pt-2 border-top border-subtle" style="font-size: 0.7rem; color: var(--text-secondary);">
     <div class="d-flex justify-content-between">

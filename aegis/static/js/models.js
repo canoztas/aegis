@@ -3,6 +3,12 @@ document.addEventListener("DOMContentLoaded", function () {
   loadRegisteredModels();
   loadOllamaModels(false);
   loadHuggingFaceModels();
+  loadMLPresets();
+
+  // Initialize cloud model presets
+  if (document.getElementById("cloudProviderType")) {
+    updateCloudModelPresets();
+  }
 
   // Attach globals
   window.loadRegisteredModels = loadRegisteredModels;
@@ -10,6 +16,10 @@ document.addEventListener("DOMContentLoaded", function () {
   window.pullOllamaModel = pullOllamaModel;
   window.seedBuiltinModels = seedBuiltinModels;
   window.addCloudModel = addCloudModel;
+  window.addMLModel = addMLModel;
+  window.loadMLPresets = loadMLPresets;
+  window.installMLPreset = installMLPreset;
+  window.deleteMLModel = deleteMLModel;
   window.registerHFPresetFromModal = registerHFPresetFromModal;
   window.openHFPresetModal = openHFPresetModal;
   window.openEditModelModal = openEditModelModal;
@@ -41,6 +51,211 @@ async function fetchJson(url, options, fallbackUrls) {
     if (!shouldFallback) throw lastError;
   }
   throw lastError || new Error("Unexpected response");
+}
+
+// =============================================================================
+// ML Model Functions (Classic ML - sklearn, joblib)
+// =============================================================================
+
+async function addMLModel() {
+  const modelType = document.getElementById("mlModelType").value;
+  const displayName = document.getElementById("mlDisplayName").value.trim();
+  const modelPath = document.getElementById("mlModelPath").value.trim();
+  const vectorizerPath = document.getElementById("mlVectorizerPath").value.trim();
+  const threshold = parseFloat(document.getElementById("mlThreshold").value) || 0.5;
+
+  const roles = [];
+  if (document.getElementById("mlRoleTriage")?.checked) roles.push("triage");
+  if (document.getElementById("mlRoleDeep")?.checked) roles.push("deep_scan");
+
+  if (!modelPath) {
+    alert("Model path is required.");
+    return;
+  }
+
+  if (!roles.length) {
+    alert("At least one role is required.");
+    return;
+  }
+
+  // Generate model_id based on type
+  const modelId = `ml:${modelType}_${Date.now()}`;
+
+  const settings = {
+    model_path: modelPath,
+    threshold: threshold,
+  };
+
+  if (vectorizerPath) {
+    settings.vectorizer_path = vectorizerPath;
+  }
+
+  const payload = {
+    model_id: modelId,
+    model_type: "tool_ml",
+    provider_id: "tool_ml",
+    model_name: modelType,
+    display_name: displayName || `ML Model (${modelType})`,
+    roles: roles,
+    parser_id: "tool_result",
+    settings: settings,
+  };
+
+  try {
+    const response = await fetch("/api/models/registry", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+
+    alert("ML Model registered successfully!");
+
+    // Clear form
+    document.getElementById("mlDisplayName").value = "";
+    document.getElementById("mlModelPath").value = "";
+    document.getElementById("mlVectorizerPath").value = "";
+    document.getElementById("mlThreshold").value = "0.5";
+
+    // Refresh lists
+    loadRegisteredModels();
+    loadMLPresets();
+  } catch (error) {
+    alert(`Failed to register ML model: ${error.message}`);
+  }
+}
+
+
+async function deleteMLModel(modelId) {
+  if (!confirm("Delete this ML model?")) return;
+
+  try {
+    await fetch(`/api/models/${encodeURIComponent(modelId)}`, { method: 'DELETE' });
+    loadRegisteredModels();
+    loadMLPresets();  // Refresh presets to show as available again
+  } catch (error) {
+    alert(`Delete failed: ${error.message}`);
+  }
+}
+
+async function loadMLPresets() {
+  try {
+    const [presetsRes, regRes] = await Promise.all([
+      fetchJson("/api/models/ml/presets"),
+      fetchJson("/api/models/registry", null, ["/api/models/registered"])
+    ]);
+
+    const container = document.getElementById("mlPresetsList");
+    const presets = presetsRes.presets || [];
+
+    if (presets.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-4 text-secondary font-monospace small">
+          <i class="bi bi-inbox fs-4 d-block mb-2 opacity-50"></i>
+          NO_PRESETS_AVAILABLE
+        </div>`;
+      return;
+    }
+
+    const regModels = regRes.models || [];
+    const regIds = new Set(regModels
+      .filter(m => m.model_type === "tool_ml" || m.provider_id === "tool_ml" || (m.model_id && m.model_id.startsWith("ml:")))
+      .map(m => {
+        // Extract preset_id from model_id (e.g., "ml:kaggle_rf_cfunctions" -> "kaggle_rf_cfunctions")
+        const id = m.model_id || m.id;
+        if (id && id.startsWith("ml:")) {
+          return id.substring(3).split("_")[0] === "kaggle" ? "kaggle_rf_cfunctions" : id.substring(3);
+        }
+        return m.model_name || id;
+      })
+    );
+
+    let html = '';
+    presets.forEach(preset => {
+      const isInstalled = regIds.has(preset.preset_id);
+
+      html += `
+        <div class="list-group-item bg-panel border-subtle text-light p-4 mb-2">
+          <div class="d-flex justify-content-between align-items-start gap-3">
+            <div class="flex-grow-1">
+              <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                <span class="fw-bold text-white">${preset.name}</span>
+              </div>
+              <div class="text-light opacity-75 small mb-2">${preset.description}</div>
+              <div class="d-flex flex-wrap gap-2">
+                ${(preset.recommended_roles || []).map(r =>
+                  `<span class="badge bg-primary bg-opacity-25 text-primary border border-primary border-opacity-25 rounded-0 small font-monospace">${String(r).replace(/_/g, " ").toUpperCase()}</span>`
+                ).join('')}
+                ${preset.size_mb ? `<span class="text-secondary font-monospace small"><i class="bi bi-hdd me-1"></i>${preset.size_mb}MB</span>` : ''}
+              </div>
+            </div>
+            <div class="flex-shrink-0 ms-3">
+              ${isInstalled
+                ? '<span class="badge bg-success text-white border border-success rounded-0 p-2 font-monospace"><i class="bi bi-check2-circle me-2"></i>INSTALLED</span>'
+                : `<button class="btn btn-success fw-bold rounded-0 font-monospace px-4 py-2 shadow-sm" onclick="installMLPreset('${preset.preset_id}')"><i class="bi bi-download me-2"></i>INSTALL</button>`
+              }
+            </div>
+          </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+  } catch (error) {
+    console.error("ML presets load error:", error);
+    document.getElementById("mlPresetsList").innerHTML = `
+      <div class="alert alert-danger font-monospace small m-2">
+        LOAD_ERROR: ${error.message}
+      </div>`;
+  }
+}
+
+async function installMLPreset(presetId) {
+  if (!confirm(`Install ML model "${presetId}"? This will download the model files.`)) {
+    return;
+  }
+
+  // Show loading state
+  const btn = event?.target?.closest('button');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>INSTALLING...';
+  }
+
+  try {
+    const response = await fetch("/api/models/ml/register_preset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        preset_id: presetId,
+        download: true
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+
+    const downloadResult = data.download_result || {};
+    const statusMsg = downloadResult.cached
+      ? "Model was already cached."
+      : "Model downloaded successfully.";
+
+    alert(`ML Model installed!\n${statusMsg}\nStatus: ${data.status}`);
+
+    // Refresh lists
+    loadMLPresets();
+    loadRegisteredModels();
+  } catch (error) {
+    alert(`Installation failed: ${error.message}`);
+    // Refresh to reset button state
+    loadMLPresets();
+  }
 }
 
 async function loadRegisteredModels() {
@@ -170,7 +385,8 @@ async function loadHuggingFaceModels() {
     let html = '<div class="list-group list-group-flush">';
     presets.forEach(preset => {
       const isReg = regIds.has(preset.model_id);
-      const presetId = preset.model_id.split('/').pop().replace(/[^a-z0-9]/gi, '_');
+      // Use the preset_id provided by the backend, not derived from model_id
+      const presetId = preset.preset_id || preset.model_id.split('/').pop().replace(/[^a-z0-9]/gi, '_');
 
       html += `
         <div class="list-group-item bg-panel border-subtle text-light p-4">
@@ -421,7 +637,7 @@ async function saveRegisteredModel() {
   };
 
   try {
-    const response = await fetch(`/ api / models / registry / ${encodeURIComponent(modelId)} `, {
+    const response = await fetch(`/api/models/registry/${encodeURIComponent(modelId)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -474,7 +690,7 @@ async function registerOllamaQuick(name) {
 
 async function deleteModel(id) {
   if (!confirm("CONFIRM_DELETION?")) return;
-  await fetch(`/ api / models / ${encodeURIComponent(id)} `, { method: 'DELETE' });
+  await fetch(`/api/models/${encodeURIComponent(id)}`, { method: 'DELETE' });
   loadRegisteredModels();
   loadOllamaModels(false);
 }
@@ -507,23 +723,101 @@ async function pullOllamaModel() {
   bootstrap.Modal.getInstance(document.getElementById("pullOllamaModal")).hide();
 }
 
+// Cloud model presets by provider
+const CLOUD_MODEL_PRESETS = {
+  openai_cloud: [
+    { value: "gpt-4o", label: "GPT-4o (Latest)" },
+    { value: "gpt-4o-mini", label: "GPT-4o Mini (Fast)" },
+    { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+    { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+    { value: "custom", label: "Custom Model..." }
+  ],
+  anthropic_cloud: [
+    { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (Latest)" },
+    { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
+    { value: "claude-3-haiku-20240307", label: "Claude 3 Haiku (Fast)" },
+    { value: "claude-3-opus-20240229", label: "Claude 3 Opus" },
+    { value: "custom", label: "Custom Model..." }
+  ],
+  google_cloud: [
+    { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
+    { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Fast)" },
+    { value: "gemini-pro", label: "Gemini Pro" },
+    { value: "custom", label: "Custom Model..." }
+  ],
+  openai_compatible: [
+    { value: "custom", label: "Custom Model..." }
+  ]
+};
+
+function updateCloudModelPresets() {
+  const providerType = document.getElementById("cloudProviderType").value;
+  const presetSelect = document.getElementById("cloudModelPreset");
+  const presets = CLOUD_MODEL_PRESETS[providerType] || CLOUD_MODEL_PRESETS.openai_compatible;
+
+  presetSelect.innerHTML = '<option value="">-- Select Model --</option>';
+  presets.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p.value;
+    opt.textContent = p.label;
+    presetSelect.appendChild(opt);
+  });
+
+  // Reset custom model field
+  document.getElementById("cloudCustomModelDiv").classList.add("d-none");
+  document.getElementById("cloudModelName").value = "";
+}
+
+function selectCloudModelPreset() {
+  const preset = document.getElementById("cloudModelPreset").value;
+  const customDiv = document.getElementById("cloudCustomModelDiv");
+
+  if (preset === "custom") {
+    customDiv.classList.remove("d-none");
+    document.getElementById("cloudModelName").value = "";
+  } else {
+    customDiv.classList.add("d-none");
+    document.getElementById("cloudModelName").value = preset;
+  }
+}
+
+function toggleCustomRateLimit() {
+  const rateLimit = document.getElementById("cloudRateLimit").value;
+  const customDiv = document.getElementById("cloudCustomRateLimitDiv");
+
+  if (rateLimit === "custom") {
+    customDiv.classList.remove("d-none");
+  } else {
+    customDiv.classList.add("d-none");
+  }
+}
+
 async function addCloudModel() {
   const providerType = document.getElementById("cloudProviderType").value;
-  const providerIdInput = document.getElementById("cloudProviderId").value.trim();
-  const modelName = document.getElementById("cloudModelName").value.trim();
-  const displayName = document.getElementById("cloudDisplayName").value.trim();
+  const providerIdInput = document.getElementById("cloudProviderId")?.value?.trim() || "";
+  const preset = document.getElementById("cloudModelPreset").value;
+  const customModelName = document.getElementById("cloudModelName").value.trim();
+  const modelName = preset === "custom" ? customModelName : (preset || customModelName);
+  const displayName = document.getElementById("cloudDisplayName")?.value?.trim() || "";
   const apiKey = document.getElementById("cloudApiKey").value.trim();
-  const baseUrl = document.getElementById("cloudBaseUrl").value.trim();
-  const parserId = document.getElementById("cloudParserId").value.trim() || "json_schema";
+  const baseUrl = document.getElementById("cloudBaseUrl")?.value?.trim() || "";
+  const parserId = document.getElementById("cloudParserId")?.value?.trim() || "json_schema";
+  const maxTokens = parseInt(document.getElementById("cloudMaxTokens")?.value) || null;
+
+  // Get rate limit
+  let rateLimitMs = parseInt(document.getElementById("cloudRateLimit").value) || 0;
+  if (document.getElementById("cloudRateLimit").value === "custom") {
+    rateLimitMs = parseInt(document.getElementById("cloudCustomRateLimit").value) || 0;
+  }
 
   const roles = [];
-  if (document.getElementById("cloudRoleTriage").checked) roles.push("triage");
-  if (document.getElementById("cloudRoleDeep").checked) roles.push("deep_scan");
-  if (document.getElementById("cloudRoleJudge").checked) roles.push("judge");
-  if (document.getElementById("cloudRoleExplain").checked) roles.push("explain");
+  if (document.getElementById("cloudRoleTriage")?.checked) roles.push("triage");
+  if (document.getElementById("cloudRoleDeep")?.checked) roles.push("deep_scan");
+  if (document.getElementById("cloudRoleJudge")?.checked) roles.push("judge");
+  if (document.getElementById("cloudRoleExplain")?.checked) roles.push("explain");
 
   if (!modelName) {
-    alert("Model name is required.");
+    alert("Please select or enter a model name.");
     return;
   }
 
@@ -538,6 +832,8 @@ async function addCloudModel() {
   const settings = {};
   if (apiKey) settings.api_key = apiKey;
   if (baseUrl) settings.base_url = baseUrl;
+  if (maxTokens) settings.max_tokens = maxTokens;
+  if (rateLimitMs > 0) settings.request_interval_ms = rateLimitMs;
 
   const payload = {
     model_type: providerType,
@@ -565,15 +861,25 @@ async function addCloudModel() {
       throw new Error(errMsg || "Cloud registration failed");
     }
     alert("Cloud model registered");
+    // Reset form
+    document.getElementById("cloudModelPreset").value = "";
     document.getElementById("cloudModelName").value = "";
     document.getElementById("cloudDisplayName").value = "";
     document.getElementById("cloudApiKey").value = "";
     document.getElementById("cloudBaseUrl").value = "";
+    document.getElementById("cloudRateLimit").value = "0";
+    document.getElementById("cloudCustomModelDiv").classList.add("d-none");
+    document.getElementById("cloudCustomRateLimitDiv").classList.add("d-none");
     loadRegisteredModels();
   } catch (e) {
     alert("Error: " + e.message);
   }
 }
+
+// Initialize presets on page load
+window.updateCloudModelPresets = updateCloudModelPresets;
+window.selectCloudModelPreset = selectCloudModelPreset;
+window.toggleCustomRateLimit = toggleCustomRateLimit;
 
 function seedBuiltinModels() {
   // Legacy support

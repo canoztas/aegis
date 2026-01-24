@@ -5,11 +5,16 @@ import logging
 import os
 from typing import Any, AsyncIterator, Dict, Optional
 
+from aegis.providers.base import CloudProviderBase
+from aegis.utils.provider_errors import handle_google_error
+
 logger = logging.getLogger(__name__)
 
 
-class GoogleProvider:
+class GoogleProvider(CloudProviderBase):
     """Provider for Google Generative AI (Gemini Pro, Gemini 1.5)."""
+
+    provider_name = "Google"
 
     def __init__(
         self,
@@ -26,67 +31,56 @@ class GoogleProvider:
             api_key: Google API key (or set GOOGLE_API_KEY env var)
             timeout: Request timeout in seconds
         """
-        self.model_name = model_name
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
-        self.timeout = timeout
-        self.kwargs = kwargs
+        super().__init__(model_name, api_key, timeout, **kwargs)
 
+        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
+
+        self._validate_api_key()
+        self._create_client()
+
+        logger.info(f"Initialized Google provider: model={model_name}")
+
+    def _validate_api_key(self) -> None:
+        """Validate API key is present."""
         if not self.api_key:
             raise ValueError("Google API key required. Set GOOGLE_API_KEY environment variable or pass api_key parameter.")
 
-        # Lazy import to avoid requiring google-generativeai package if not used
+    def _create_client(self) -> None:
+        """Create the Google Generative AI client."""
         try:
             import google.generativeai as genai
             self.genai = genai
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(model_name)
+            self.model = genai.GenerativeModel(self.model_name)
         except ImportError:
             raise ImportError("Google Generative AI package required. Install with: pip install google-generativeai")
 
-        logger.info(f"Initialized Google provider: model={model_name}")
-
-    async def generate(
+    async def _make_generate_request(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.1,
-        max_tokens: int = 2048,
-        top_p: float = 0.95,
+        system_prompt: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        top_p: float,
         top_k: int = 40,
-        stream: bool = False,
         **kwargs,
     ) -> str:
-        """
-        Generate completion from Google Generative AI.
+        """Make the Google Generative AI request."""
+        # Google Generative AI doesn't have separate system prompt
+        # So we prepend it to the user prompt
+        full_prompt = prompt
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\n{prompt}"
 
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system prompt (prepended to prompt)
-            temperature: Sampling temperature (0.0-2.0)
-            max_tokens: Maximum tokens to generate
-            top_p: Nucleus sampling parameter
-            top_k: Top-K sampling parameter
-            stream: Enable streaming (not yet implemented)
-            **kwargs: Additional Google API parameters
+        generation_config = self.genai.types.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+            top_p=top_p,
+            top_k=top_k,
+            **kwargs,
+        )
 
-        Returns:
-            Generated text
-        """
         try:
-            # Google Generative AI doesn't have separate system prompt
-            # So we prepend it to the user prompt
-            full_prompt = prompt
-            if system_prompt:
-                full_prompt = f"{system_prompt}\n\n{prompt}"
-
-            generation_config = self.genai.types.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-                top_p=top_p,
-                top_k=top_k,
-                **kwargs,
-            )
-
             # Run sync method in executor to avoid blocking
             response = await asyncio.to_thread(
                 self.model.generate_content,
@@ -109,80 +103,48 @@ class GoogleProvider:
             return content
 
         except Exception as e:
-            logger.error(f"Google provider error: {e}")
-            raise
+            handle_google_error(e, self.provider_name)
 
-    async def generate_stream(
+    async def _make_stream_request(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.1,
-        max_tokens: int = 2048,
-        top_p: float = 0.95,
+        system_prompt: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        top_p: float,
         top_k: int = 40,
         **kwargs,
-    ) -> AsyncIterator[str]:
-        """
-        Generate streaming completion from Google Generative AI.
+    ) -> Any:
+        """Make the Google Generative AI streaming request."""
+        full_prompt = prompt
+        if system_prompt:
+            full_prompt = f"{system_prompt}\n\n{prompt}"
 
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system prompt
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
-            top_p: Nucleus sampling parameter
-            top_k: Top-K sampling parameter
-            **kwargs: Additional Google API parameters
+        generation_config = self.genai.types.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+            top_p=top_p,
+            top_k=top_k,
+            **kwargs,
+        )
 
-        Yields:
-            Generated text chunks
-        """
         try:
-            full_prompt = prompt
-            if system_prompt:
-                full_prompt = f"{system_prompt}\n\n{prompt}"
-
-            generation_config = self.genai.types.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-                top_p=top_p,
-                top_k=top_k,
-                **kwargs,
-            )
-
             # Run sync streaming in executor
-            response = await asyncio.to_thread(
+            return await asyncio.to_thread(
                 self.model.generate_content,
                 full_prompt,
                 generation_config=generation_config,
                 stream=True,
             )
 
-            for chunk in response:
-                if chunk.text:
-                    yield chunk.text
-
         except Exception as e:
-            logger.error(f"Google streaming error: {e}")
-            raise
+            handle_google_error(e, self.provider_name)
 
-    async def get_usage_info(self) -> Dict[str, Any]:
-        """
-        Get current token usage and cost estimates.
-
-        Returns:
-            Dictionary with usage information
-        """
-        return {
-            "provider": "google",
-            "model": self.model_name,
-            "message": "Token usage tracked per request in logs",
-        }
-
-    def close(self):
-        """Close the Google client."""
-        # No cleanup needed for Google Generative AI
-        pass
+    async def _iterate_stream(self, stream: Any) -> AsyncIterator[str]:
+        """Iterate over the Google stream and yield text chunks."""
+        for chunk in stream:
+            if chunk.text:
+                yield chunk.text
 
 
 # Model pricing (USD per 1M tokens) - Updated 2025-01

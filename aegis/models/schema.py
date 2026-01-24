@@ -26,6 +26,40 @@ class ModelRole(str, Enum):
     CUSTOM = "custom"           # User-defined roles
 
 
+# Legacy role mapping for backward compatibility
+# Maps old role names to current ModelRole enums
+LEGACY_ROLE_MAPPING = {
+    "scan": ModelRole.DEEP_SCAN,  # Old 'scan' maps to deep_scan
+    "triage": ModelRole.TRIAGE,
+    "deep_scan": ModelRole.DEEP_SCAN,
+    "judge": ModelRole.JUDGE,
+    "explain": ModelRole.EXPLAIN,
+    "custom": ModelRole.CUSTOM,
+}
+
+
+def parse_role(role_str: str) -> ModelRole:
+    """
+    Parse role string with legacy mapping support.
+
+    Args:
+        role_str: Role string to parse
+
+    Returns:
+        ModelRole enum value
+
+    Raises:
+        ValueError: If role string is not recognized
+    """
+    try:
+        return ModelRole(role_str)
+    except ValueError:
+        mapped = LEGACY_ROLE_MAPPING.get(role_str.lower())
+        if mapped:
+            return mapped
+        raise ValueError(f"Invalid role: {role_str}")
+
+
 class ModelStatus(str, Enum):
     """Registration status of a model."""
     REGISTERED = "registered"   # Active and usable

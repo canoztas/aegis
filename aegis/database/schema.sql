@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS models (
     model_id TEXT UNIQUE NOT NULL,       -- e.g., 'ollama:qwen2.5-coder:7b'
     display_name TEXT NOT NULL,
     model_name TEXT NOT NULL,            -- actual model identifier for API
-    role TEXT DEFAULT 'scan',            -- 'triage', 'deep_scan', 'judge', 'explain', 'scan'
+    role TEXT DEFAULT 'scan',            -- DEPRECATED: Use roles_json instead. Kept for backward compatibility.
+    roles_json TEXT DEFAULT '[]',        -- JSON array of roles: ["deep_scan", "judge"]
     config_json TEXT,                    -- model-specific overrides
     weight REAL DEFAULT 1.0,             -- for weighted consensus
     enabled BOOLEAN DEFAULT 1,
@@ -41,7 +42,7 @@ CREATE TABLE IF NOT EXISTS scans (
     scan_id TEXT UNIQUE NOT NULL,        -- UUID
     status TEXT NOT NULL,                -- 'pending', 'running', 'completed', 'failed', 'cancelled'
     upload_filename TEXT,                -- Original uploaded file name
-    pipeline_config_json TEXT,           -- Pipeline definition used
+    pipeline_config_json TEXT,           -- LEGACY: Stores scan config (models, judge_model_id). Name kept for DB compatibility.
     consensus_strategy TEXT DEFAULT 'union',
     total_files INTEGER DEFAULT 0,
     processed_files INTEGER DEFAULT 0,
@@ -103,18 +104,6 @@ CREATE TABLE IF NOT EXISTS model_executions (
     FOREIGN KEY (model_id) REFERENCES models(model_id) ON DELETE SET NULL
 );
 
--- Pipelines (user-configurable scan workflows)
-CREATE TABLE IF NOT EXISTS pipelines (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE NOT NULL,
-    description TEXT,
-    config_json TEXT NOT NULL,           -- Pipeline DAG/steps definition
-    is_default BOOLEAN DEFAULT 0,
-    enabled BOOLEAN DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
 -- Indexes for performance optimization
 CREATE INDEX IF NOT EXISTS idx_scans_status ON scans(status);
 CREATE INDEX IF NOT EXISTS idx_scans_created_at ON scans(created_at DESC);
@@ -124,5 +113,5 @@ CREATE INDEX IF NOT EXISTS idx_findings_consensus ON findings(is_consensus);
 CREATE INDEX IF NOT EXISTS idx_findings_fingerprint ON findings(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_model_executions_scan_id ON model_executions(scan_id);
 CREATE INDEX IF NOT EXISTS idx_scan_files_scan_id ON scan_files(scan_id);
-CREATE INDEX IF NOT EXISTS idx_models_role ON models(role);
+-- Note: idx_models_role removed - role column is deprecated, use roles_json instead
 CREATE INDEX IF NOT EXISTS idx_models_enabled ON models(enabled);

@@ -1,15 +1,19 @@
 """Anthropic API provider for Claude models."""
 
-import asyncio
 import logging
 import os
 from typing import Any, AsyncIterator, Dict, Optional
 
+from aegis.providers.base import CloudProviderBase
+from aegis.utils.provider_errors import handle_anthropic_error
+
 logger = logging.getLogger(__name__)
 
 
-class AnthropicProvider:
+class AnthropicProvider(CloudProviderBase):
     """Provider for Anthropic API (Claude 3 Opus, Sonnet, Haiku)."""
+
+    provider_name = "Anthropic"
 
     def __init__(
         self,
@@ -30,17 +34,23 @@ class AnthropicProvider:
             timeout: Request timeout in seconds
             max_retries: Maximum retry attempts
         """
-        self.model_name = model_name
+        super().__init__(model_name, api_key, timeout, max_retries, **kwargs)
+
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         self.base_url = base_url or "https://api.anthropic.com"
-        self.timeout = timeout
-        self.max_retries = max_retries
-        self.kwargs = kwargs
 
+        self._validate_api_key()
+        self._create_client()
+
+        logger.info(f"Initialized Anthropic provider: model={model_name}, base_url={self.base_url}")
+
+    def _validate_api_key(self) -> None:
+        """Validate API key is present."""
         if not self.api_key:
             raise ValueError("Anthropic API key required. Set ANTHROPIC_API_KEY environment variable or pass api_key parameter.")
 
-        # Lazy import to avoid requiring anthropic package if not used
+    def _create_client(self) -> None:
+        """Create the Anthropic async client."""
         try:
             import anthropic
             self.anthropic = anthropic
@@ -53,33 +63,16 @@ class AnthropicProvider:
         except ImportError:
             raise ImportError("Anthropic package required. Install with: pip install anthropic")
 
-        logger.info(f"Initialized Anthropic provider: model={model_name}, base_url={self.base_url}")
-
-    async def generate(
+    async def _make_generate_request(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.1,
-        max_tokens: int = 4096,
-        top_p: float = 1.0,
-        stream: bool = False,
+        system_prompt: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        top_p: float,
         **kwargs,
     ) -> str:
-        """
-        Generate completion from Anthropic API.
-
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system prompt
-            temperature: Sampling temperature (0.0-1.0)
-            max_tokens: Maximum tokens to generate
-            top_p: Nucleus sampling parameter
-            stream: Enable streaming (not yet implemented)
-            **kwargs: Additional Anthropic API parameters
-
-        Returns:
-            Generated text
-        """
+        """Make the Anthropic messages request."""
         try:
             # Anthropic uses system parameter separately
             create_params = {
@@ -108,42 +101,19 @@ class AnthropicProvider:
 
             return content
 
-        except self.anthropic.APIError as e:
-            logger.error(f"Anthropic API error: {e}")
-            raise
-        except self.anthropic.RateLimitError as e:
-            logger.error(f"Anthropic rate limit exceeded: {e}")
-            raise
-        except self.anthropic.AuthenticationError as e:
-            logger.error(f"Anthropic authentication failed: {e}")
-            raise
         except Exception as e:
-            logger.error(f"Anthropic provider error: {e}")
-            raise
+            handle_anthropic_error(e, self.anthropic, self.provider_name)
 
-    async def generate_stream(
+    async def _make_stream_request(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.1,
-        max_tokens: int = 4096,
-        top_p: float = 1.0,
+        system_prompt: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        top_p: float,
         **kwargs,
-    ) -> AsyncIterator[str]:
-        """
-        Generate streaming completion from Anthropic API.
-
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system prompt
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
-            top_p: Nucleus sampling parameter
-            **kwargs: Additional Anthropic API parameters
-
-        Yields:
-            Generated text chunks
-        """
+    ) -> Any:
+        """Make the Anthropic streaming messages request."""
         try:
             create_params = {
                 "model": self.model_name,
@@ -157,31 +127,16 @@ class AnthropicProvider:
             if system_prompt:
                 create_params["system"] = system_prompt
 
-            async with self.client.messages.stream(**create_params) as stream:
-                async for text in stream.text_stream:
-                    yield text
+            return self.client.messages.stream(**create_params)
 
         except Exception as e:
-            logger.error(f"Anthropic streaming error: {e}")
-            raise
+            handle_anthropic_error(e, self.anthropic, self.provider_name)
 
-    async def get_usage_info(self) -> Dict[str, Any]:
-        """
-        Get current token usage and cost estimates.
-
-        Returns:
-            Dictionary with usage information
-        """
-        return {
-            "provider": "anthropic",
-            "model": self.model_name,
-            "message": "Token usage tracked per request in logs",
-        }
-
-    def close(self):
-        """Close the Anthropic client."""
-        # AsyncAnthropic client handles cleanup automatically
-        pass
+    async def _iterate_stream(self, stream: Any) -> AsyncIterator[str]:
+        """Iterate over the Anthropic stream and yield text chunks."""
+        async with stream as s:
+            async for text in s.text_stream:
+                yield text
 
 
 # Model pricing (USD per 1M tokens) - Updated 2025-01

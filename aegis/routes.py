@@ -109,6 +109,12 @@ def history_page() -> str:
     return render_template("history.html")
 
 
+@main_bp.route("/gpu")
+def gpu_manager_page() -> str:
+    """GPU Runtime Manager page."""
+    return render_template("gpu_manager.html")
+
+
 @main_bp.route("/scan/<scan_id>")
 def scan_detail(scan_id: str) -> str:
     """Scan detail page."""
@@ -146,6 +152,27 @@ def create_scan() -> Any:
     consensus_strategy = data.get("consensus_strategy", "union")
     judge_model_id = data.get("judge_model_id")
 
+    # Cascade consensus configuration
+    cascade_config = None
+    if consensus_strategy == "cascade":
+        # Parse cascade configuration
+        pass1_models = data.get("pass1_models", "").split(",") if data.get("pass1_models") else []
+        pass2_models = data.get("pass2_models", "").split(",") if data.get("pass2_models") else []
+        pass1_models = [m.strip() for m in pass1_models if m.strip()]
+        pass2_models = [m.strip() for m in pass2_models if m.strip()]
+
+        cascade_config = {
+            "pass1_models": pass1_models,
+            "pass2_models": pass2_models,
+            "pass1_strategy": data.get("pass1_strategy", "union"),
+            "pass2_strategy": data.get("pass2_strategy", "union"),
+            "pass1_judge_model_id": data.get("pass1_judge_model_id"),
+            "pass2_judge_model_id": data.get("pass2_judge_model_id"),
+            "min_severity": data.get("min_severity", "low"),
+            "min_confidence": float(data.get("min_confidence", "0.0")),
+            "flag_any_finding": data.get("flag_any_finding", "true").lower() == "true",
+        }
+
     filepath = None
     try:
         # Save uploaded file
@@ -164,16 +191,76 @@ def create_scan() -> Any:
 
         # Validate selected models against new registry
         registry = NewModelRegistry()
-        valid_model_ids = []
-        for model_id in model_ids:
-            if registry.get_model(model_id):
-                valid_model_ids.append(model_id)
 
-        if not valid_model_ids:
-            if filepath and os.path.exists(filepath):
-                os.remove(filepath)
-            return jsonify({"error": "No valid models selected"}), 400
-        debug_scan_log(f"[scan-debug] valid models: {valid_model_ids}")
+        if consensus_strategy == "cascade" and cascade_config:
+            # Validate cascade models
+            debug_scan_log(
+                f"[scan-debug] cascade config received: pass1={cascade_config['pass1_models']} "
+                f"pass2={cascade_config['pass2_models']}"
+            )
+
+            # Log available models for debugging
+            available_models = [m.model_id for m in registry.list_models()]
+            debug_scan_log(f"[scan-debug] available models in registry: {available_models}")
+
+            valid_pass1_models = []
+            for model_id in cascade_config["pass1_models"]:
+                model_id_clean = model_id.strip()
+                # get_model now handles trimming internally
+                model = registry.get_model(model_id_clean)
+                if model:
+                    valid_pass1_models.append(model.model_id)  # Use the actual ID from registry
+                else:
+                    debug_scan_log(f"[scan-debug] pass1 model not found: '{model_id}'")
+
+            valid_pass2_models = []
+            for model_id in cascade_config["pass2_models"]:
+                model_id_clean = model_id.strip()
+                # get_model now handles trimming internally
+                model = registry.get_model(model_id_clean)
+                if model:
+                    valid_pass2_models.append(model.model_id)  # Use the actual ID from registry
+                else:
+                    debug_scan_log(f"[scan-debug] pass2 model not found: '{model_id}'")
+
+            if not valid_pass1_models:
+                if filepath and os.path.exists(filepath):
+                    os.remove(filepath)
+                return jsonify({
+                    "error": "No valid Pass 1 models selected",
+                    "received": cascade_config["pass1_models"],
+                    "available": available_models
+                }), 400
+
+            if not valid_pass2_models:
+                if filepath and os.path.exists(filepath):
+                    os.remove(filepath)
+                return jsonify({
+                    "error": "No valid Pass 2 models selected",
+                    "received": cascade_config["pass2_models"],
+                    "available": available_models
+                }), 400
+
+            cascade_config["pass1_models"] = valid_pass1_models
+            cascade_config["pass2_models"] = valid_pass2_models
+            # For cascade, use combined model list for display
+            valid_model_ids = valid_pass1_models + valid_pass2_models
+            debug_scan_log(
+                f"[scan-debug] cascade models: pass1={valid_pass1_models} pass2={valid_pass2_models}"
+            )
+        else:
+            valid_model_ids = []
+            for model_id in model_ids:
+                model_id_clean = model_id.strip()
+                model = registry.get_model(model_id_clean)
+                if model:
+                    valid_model_ids.append(model.model_id)  # Use the actual ID from registry
+
+            if not valid_model_ids:
+                if filepath and os.path.exists(filepath):
+                    os.remove(filepath)
+                return jsonify({"error": "No valid models selected"}), 400
+            debug_scan_log(f"[scan-debug] valid models: {valid_model_ids}")
 
         # Generate scan ID
         scan_id = str(uuid.uuid4())
@@ -194,6 +281,8 @@ def create_scan() -> Any:
                 }
                 if judge_model_id:
                     pipeline_config["judge_model_id"] = judge_model_id
+                if cascade_config:
+                    pipeline_config["cascade"] = cascade_config
 
                 scan_repo.create(
                     scan_id=scan_id,
@@ -229,6 +318,7 @@ def create_scan() -> Any:
             model_ids=valid_model_ids,
             consensus_strategy=consensus_strategy,
             judge_model_id=judge_model_id,
+            cascade_config=cascade_config,
         ))
         debug_scan_log(f"[scan-debug] scan enqueued: {scan_id}")
 
@@ -739,168 +829,6 @@ def get_scan_csv(scan_id: str) -> Any:
         mimetype="text/csv",
         headers={"Content-Disposition": f"attachment; filename=scan_{scan_id}.csv"},
     )
-
-
-# Pipeline Routes
-
-@main_bp.route("/api/pipelines", methods=["GET"])
-def list_pipelines() -> Any:
-    """List available pipelines."""
-    from aegis.pipeline import PipelineRegistry
-
-    registry = PipelineRegistry()
-    all_pipelines = registry.list_all()
-
-    return jsonify({
-        "presets": all_pipelines["presets"],
-        "custom": all_pipelines["custom"],
-    })
-
-
-@main_bp.route("/api/pipelines/<pipeline_name>", methods=["GET"])
-def get_pipeline(pipeline_name: str) -> Any:
-    """Get pipeline configuration by name."""
-    from aegis.pipeline import PipelineRegistry
-
-    registry = PipelineRegistry()
-
-    # Try presets first
-    pipeline = registry.get_pipeline(pipeline_name, is_preset=True)
-    if not pipeline:
-        # Try custom
-        pipeline = registry.get_pipeline(pipeline_name, is_preset=False)
-
-    if not pipeline:
-        return jsonify({"error": "Pipeline not found"}), 404
-
-    return jsonify({
-        "name": pipeline.name,
-        "version": pipeline.version,
-        "description": pipeline.description,
-        "is_preset": pipeline.is_preset,
-        "steps": [
-            {
-                "id": step.id,
-                "kind": step.kind.value,
-                "role": step.role,
-                "models": step.models,
-                "enabled": step.enabled,
-            }
-            for step in pipeline.steps
-        ],
-    })
-
-
-@main_bp.route("/api/scan/pipeline", methods=["POST"])
-def create_pipeline_scan() -> Any:
-    """Create a scan using a pipeline."""
-    if "file" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
-
-    file: FileStorage = request.files["file"]
-
-    if not allowed_file(file.filename):
-        return jsonify({"error": "Invalid file type"}), 400
-
-    data = request.form.to_dict()
-    pipeline_name = data.get("pipeline", "classic")  # Default to classic
-
-    filepath = None
-    try:
-        # Import pipeline components
-        from aegis.pipeline import PipelineLoader, PipelineExecutor
-
-        # Load pipeline
-        loader = PipelineLoader()
-        try:
-            pipeline = loader.load_preset(pipeline_name)
-        except FileNotFoundError:
-            if filepath and os.path.exists(filepath):
-                os.remove(filepath)
-            return jsonify({"error": f"Pipeline '{pipeline_name}' not found"}), 404
-
-        # Save uploaded file
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(current_app.config["UPLOAD_FOLDER"], filename)
-        file.save(filepath)
-
-        # Extract source files
-        source_files = extract_source_files(filepath)
-
-        # Execute pipeline
-        executor = PipelineExecutor()
-        scan_id = str(uuid.uuid4())
-
-        context = executor.execute(
-            pipeline=pipeline,
-            source_files=source_files,
-            scan_id=scan_id,
-        )
-
-        # Get final findings
-        final_findings = executor._get_final_findings(context)
-
-        # Convert findings dicts to Finding objects for compatibility
-        from aegis.data_models import Finding
-        consensus_findings = [Finding(**f) for f in final_findings]
-
-        # Create ScanResult for compatibility
-        scan_result = ScanResult(
-            scan_id=scan_id,
-            consensus_findings=consensus_findings,
-            per_model_findings={},  # Could be extracted from context if needed
-            consensus_strategy=pipeline.name,
-        )
-        scan_result.source_files = source_files
-
-        # Store result
-        _scan_results[scan_id] = scan_result
-
-        # V2: Persist to database
-        if _use_v2:
-            scan_repo, finding_repo = get_v2_repositories()
-            try:
-                # Create scan record with pipeline config
-                scan_repo.create(
-                    scan_id=scan_id,
-                    pipeline_config={
-                        "pipeline_name": pipeline.name,
-                        "pipeline_version": pipeline.version,
-                        "steps": len(pipeline.steps),
-                    },
-                    consensus_strategy=pipeline.name,
-                )
-
-                # Store consensus findings
-                for finding in consensus_findings:
-                    finding_repo.create_consensus_finding(
-                        scan_id=scan_id,
-                        finding=finding,
-                    )
-
-                # Mark scan as completed
-                scan_repo.update_status(scan_id, "completed")
-
-            except Exception as e:
-                current_app.logger.error(f"Failed to persist pipeline scan to database: {e}")
-
-        # Cleanup
-        if filepath and os.path.exists(filepath):
-            os.remove(filepath)
-
-        return jsonify({
-            "scan_id": scan_id,
-            "pipeline": pipeline.name,
-            "total_findings": len(consensus_findings),
-            "steps_completed": len(context.completed_steps),
-            "steps_failed": len(context.failed_steps),
-        })
-
-    except Exception as e:
-        if filepath and os.path.exists(filepath):
-            os.remove(filepath)
-        current_app.logger.error(f"Pipeline scan failed: {e}")
-        return jsonify({"error": str(e)}), 500
 
 
 @main_bp.route("/api/scans", methods=["GET"])

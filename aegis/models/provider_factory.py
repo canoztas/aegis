@@ -1,6 +1,7 @@
 """Factory helpers for creating provider instances based on ModelRecord."""
 
 import asyncio
+import concurrent.futures
 import os
 from typing import Any, Dict
 
@@ -70,6 +71,23 @@ class OpenAICompatibleProvider:
 class CloudProviderAdapter:
     """Adapter for cloud API providers (OpenAI, Anthropic, Google) with sync interface."""
 
+    # Shared executor for all instances to reduce thread overhead
+    _executor: concurrent.futures.ThreadPoolExecutor = None
+    _executor_lock = None
+
+    @classmethod
+    def _get_executor(cls) -> concurrent.futures.ThreadPoolExecutor:
+        """Get or create shared thread pool executor."""
+        import threading
+
+        if cls._executor_lock is None:
+            cls._executor_lock = threading.Lock()
+
+        with cls._executor_lock:
+            if cls._executor is None or cls._executor._shutdown:
+                cls._executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+            return cls._executor
+
     def __init__(self, provider: Any, settings: Dict[str, Any]):
         """
         Initialize cloud provider adapter.
@@ -100,11 +118,6 @@ class CloudProviderAdapter:
         }
         opts.update(kwargs)
 
-        # Run async generate in sync context
-        # Use a thread pool to avoid "asyncio.run() cannot be called from a running event loop" error
-        # This approach works whether or not an event loop is already running
-        import concurrent.futures
-
         def _run_async():
             """Helper to run async code in a fresh event loop."""
             return asyncio.run(
@@ -115,9 +128,9 @@ class CloudProviderAdapter:
                 )
             )
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_run_async)
-            return future.result()
+        executor = self._get_executor()
+        future = executor.submit(_run_async)
+        return future.result()
 
     def close(self):
         """Close provider resources."""
@@ -186,6 +199,7 @@ def create_provider(model: ModelRecord) -> Any:
                 device=device,
                 generation_kwargs=generation_kwargs,
                 max_workers=runtime.max_concurrency,
+                custom_loading=settings.get("custom_loading", False),
                 **hf_kwargs,
             )
         except RuntimeConfigError as exc:

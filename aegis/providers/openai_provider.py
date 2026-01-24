@@ -1,15 +1,19 @@
 """OpenAI API provider for GPT models."""
 
-import asyncio
 import logging
 import os
 from typing import Any, AsyncIterator, Dict, Optional
 
+from aegis.providers.base import CloudProviderBase
+from aegis.utils.provider_errors import handle_openai_error
+
 logger = logging.getLogger(__name__)
 
 
-class OpenAIProvider:
+class OpenAIProvider(CloudProviderBase):
     """Provider for OpenAI API (GPT-3.5, GPT-4, GPT-4-Turbo)."""
+
+    provider_name = "OpenAI"
 
     def __init__(
         self,
@@ -32,18 +36,24 @@ class OpenAIProvider:
             timeout: Request timeout in seconds
             max_retries: Maximum retry attempts
         """
-        self.model_name = model_name
+        super().__init__(model_name, api_key, timeout, max_retries, **kwargs)
+
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.base_url = base_url or "https://api.openai.com/v1"
         self.organization = organization
-        self.timeout = timeout
-        self.max_retries = max_retries
-        self.kwargs = kwargs
 
+        self._validate_api_key()
+        self._create_client()
+
+        logger.info(f"Initialized OpenAI provider: model={model_name}, base_url={self.base_url}")
+
+    def _validate_api_key(self) -> None:
+        """Validate API key is present."""
         if not self.api_key:
             raise ValueError("OpenAI API key required. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
 
-        # Lazy import to avoid requiring openai package if not used
+    def _create_client(self) -> None:
+        """Create the OpenAI async client."""
         try:
             import openai
             self.openai = openai
@@ -57,33 +67,16 @@ class OpenAIProvider:
         except ImportError:
             raise ImportError("OpenAI package required. Install with: pip install openai")
 
-        logger.info(f"Initialized OpenAI provider: model={model_name}, base_url={self.base_url}")
-
-    async def generate(
+    async def _make_generate_request(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.1,
-        max_tokens: int = 2048,
-        top_p: float = 1.0,
-        stream: bool = False,
+        system_prompt: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        top_p: float,
         **kwargs,
     ) -> str:
-        """
-        Generate completion from OpenAI API.
-
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system prompt
-            temperature: Sampling temperature (0.0-2.0)
-            max_tokens: Maximum tokens to generate
-            top_p: Nucleus sampling parameter
-            stream: Enable streaming (not yet implemented)
-            **kwargs: Additional OpenAI API parameters
-
-        Returns:
-            Generated text
-        """
+        """Make the OpenAI chat completion request."""
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -112,49 +105,26 @@ class OpenAIProvider:
 
             return content
 
-        except self.openai.APIError as e:
-            logger.error(f"OpenAI API error: {e}")
-            raise
-        except self.openai.RateLimitError as e:
-            logger.error(f"OpenAI rate limit exceeded: {e}")
-            raise
-        except self.openai.AuthenticationError as e:
-            logger.error(f"OpenAI authentication failed: {e}")
-            raise
         except Exception as e:
-            logger.error(f"OpenAI provider error: {e}")
-            raise
+            handle_openai_error(e, self.openai, self.provider_name)
 
-    async def generate_stream(
+    async def _make_stream_request(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
-        temperature: float = 0.1,
-        max_tokens: int = 2048,
-        top_p: float = 1.0,
+        system_prompt: Optional[str],
+        temperature: float,
+        max_tokens: int,
+        top_p: float,
         **kwargs,
-    ) -> AsyncIterator[str]:
-        """
-        Generate streaming completion from OpenAI API.
-
-        Args:
-            prompt: User prompt
-            system_prompt: Optional system prompt
-            temperature: Sampling temperature
-            max_tokens: Maximum tokens to generate
-            top_p: Nucleus sampling parameter
-            **kwargs: Additional OpenAI API parameters
-
-        Yields:
-            Generated text chunks
-        """
+    ) -> Any:
+        """Make the OpenAI streaming chat completion request."""
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
 
         try:
-            stream = await self.client.chat.completions.create(
+            return await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=temperature,
@@ -164,33 +134,14 @@ class OpenAIProvider:
                 **kwargs,
             )
 
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-
         except Exception as e:
-            logger.error(f"OpenAI streaming error: {e}")
-            raise
+            handle_openai_error(e, self.openai, self.provider_name)
 
-    async def get_usage_info(self) -> Dict[str, Any]:
-        """
-        Get current token usage and cost estimates.
-
-        Returns:
-            Dictionary with usage information
-        """
-        # Note: OpenAI doesn't provide a direct usage API
-        # This would need to be tracked separately via database
-        return {
-            "provider": "openai",
-            "model": self.model_name,
-            "message": "Token usage tracked per request in logs",
-        }
-
-    def close(self):
-        """Close the OpenAI client."""
-        # AsyncOpenAI client handles cleanup automatically
-        pass
+    async def _iterate_stream(self, stream: Any) -> AsyncIterator[str]:
+        """Iterate over the OpenAI stream and yield text chunks."""
+        async for chunk in stream:
+            if chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 
 
 # Model pricing (USD per 1K tokens) - Updated 2025-01

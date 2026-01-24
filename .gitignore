@@ -124,6 +124,15 @@ data/*.db-journal
 # But keep reference data
 !data/cwe.json
 
+# ML Models (downloaded sklearn models)
+aegis/ml_models/
+ml_models/
+models_cache/
+*.pkl
+
+# Test cases and samples
+test-cases/
+
 # Migration scripts (keep schema, exclude data migrations)
 migrate_db.py
 

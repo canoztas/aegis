@@ -63,7 +63,8 @@
       <h5 class="fw-bold mb-3 text-uppercase text-secondary small tracking-wider"><i
           class="bi bi-grid-3x3-gap me-2"></i> Phase II: Select Strategy</h5>
 
-      <div class="row g-4">
+      <!-- Scan Configuration -->
+      <div id="scanConfig" class="row g-4">
         <!-- Active Models UI -->
         <div class="col-md-7">
           <div class="card bg-panel border-subtle h-100 shadow-sm">
@@ -140,6 +141,32 @@
                     class="position-absolute top-0 start-0 w-1 h-100 bg-primary opacity-0 peer-checked-opacity-100 transition-all">
                   </div>
                 </label>
+
+                <label
+                  class="strategy-card p-3 border border-subtle rounded-1 bg-surface position-relative opacity-50"
+                  style="cursor: not-allowed;">
+                  <input type="radio" name="consensusStrategy" value="cascade" class="d-none peer" disabled>
+                  <div class="d-flex align-items-center gap-3">
+                    <i class="bi bi-funnel fs-5 text-secondary"></i>
+                    <div>
+                      <div class="fw-bold text-secondary text-uppercase small">Cascade <span class="text-warning">(SOON)</span></div>
+                      <div class="extra-small text-secondary">Two-pass gated scan</div>
+                    </div>
+                  </div>
+                </label>
+
+                <label
+                  class="strategy-card p-3 border border-subtle rounded-1 bg-surface position-relative opacity-50"
+                  style="cursor: not-allowed;">
+                  <input type="radio" name="consensusStrategy" value="weighted" class="d-none peer" disabled>
+                  <div class="d-flex align-items-center gap-3">
+                    <i class="bi bi-sliders fs-5 text-secondary"></i>
+                    <div>
+                      <div class="fw-bold text-secondary text-uppercase small">Weighted <span class="text-warning">(SOON)</span></div>
+                      <div class="extra-small text-secondary">Confidence-weighted voting</div>
+                    </div>
+                  </div>
+                </label>
               </div>
 
               <div id="judgeModelSelect" class="mt-3 d-none fade-in">
@@ -152,6 +179,83 @@
           </div>
         </div>
       </div>
+
+      <!-- Cascade Consensus Configuration -->
+      <div id="cascadeConfig" class="d-none mt-4 fade-in">
+        <div class="card bg-panel border-subtle shadow-sm">
+          <div class="card-header bg-transparent border-bottom border-subtle py-3">
+            <span class="small fw-bold text-uppercase text-light font-monospace">
+              <i class="bi bi-funnel me-2"></i>Cascade Consensus Configuration
+            </span>
+          </div>
+          <div class="card-body p-3">
+            <div class="row g-4">
+              <!-- Pass 1 Models -->
+              <div class="col-md-6">
+                <div class="p-3 bg-surface rounded-1 border border-subtle">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="small fw-bold text-uppercase text-warning font-monospace">
+                      <i class="bi bi-1-circle me-1"></i> Pass 1: Triage
+                    </span>
+                    <span class="badge bg-warning bg-opacity-10 text-warning font-monospace rounded-0 extra-small"
+                      id="pass1CountBadge">0 SELECTED</span>
+                  </div>
+                  <p class="extra-small text-secondary mb-2">Scan ALL files to identify suspicious code</p>
+                  <div id="pass1ModelPicker" class="d-flex flex-wrap gap-2" style="min-height: 80px; max-height: 150px; overflow-y: auto;">
+                  </div>
+                  <select id="pass1ModelsSelect" name="pass1_models" class="d-none" multiple></select>
+                </div>
+              </div>
+
+              <!-- Pass 2 Models -->
+              <div class="col-md-6">
+                <div class="p-3 bg-surface rounded-1 border border-subtle">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <span class="small fw-bold text-uppercase text-info font-monospace">
+                      <i class="bi bi-2-circle me-1"></i> Pass 2: Deep Scan
+                    </span>
+                    <span class="badge bg-info bg-opacity-10 text-info font-monospace rounded-0 extra-small"
+                      id="pass2CountBadge">0 SELECTED</span>
+                  </div>
+                  <p class="extra-small text-secondary mb-2">Analyze ONLY flagged files in detail</p>
+                  <div id="pass2ModelPicker" class="d-flex flex-wrap gap-2" style="min-height: 80px; max-height: 150px; overflow-y: auto;">
+                  </div>
+                  <select id="pass2ModelsSelect" name="pass2_models" class="d-none" multiple></select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cascade Options -->
+            <div class="mt-3 p-3 bg-black bg-opacity-25 rounded-1">
+              <div class="row g-3 align-items-center">
+                <div class="col-md-6">
+                  <label class="form-label text-secondary font-monospace extra-small text-uppercase mb-1">
+                    Min Severity to Flag File
+                  </label>
+                  <select id="cascadeMinSeverity" name="min_severity"
+                    class="form-select form-select-sm bg-black border-subtle text-light font-monospace rounded-0">
+                    <option value="low" selected>Low (any finding)</option>
+                    <option value="medium">Medium+</option>
+                    <option value="high">High+</option>
+                    <option value="critical">Critical only</option>
+                  </select>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label text-secondary font-monospace extra-small text-uppercase mb-1">
+                    Pass 1 Consensus Strategy
+                  </label>
+                  <select id="pass1Strategy" name="pass1_strategy"
+                    class="form-select form-select-sm bg-black border-subtle text-light font-monospace rounded-0">
+                    <option value="union" selected>Union</option>
+                    <option value="majority_vote">Majority Vote</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- Section 3: Action -->
@@ -209,6 +313,11 @@
 
   const observerSelect = new MutationObserver(() => {
     refreshModelPicker();
+    // Also update cascade model pickers when models change
+    const consensusStrategy = document.querySelector('input[name="consensusStrategy"]:checked')?.value;
+    if (consensusStrategy === 'cascade') {
+      populateCascadeModelPickers();
+    }
   });
   observerSelect.observe(select, { childList: true });
 
@@ -236,10 +345,13 @@
     countBadge.textContent = `${count} SELECTED`;
     countBadge.className = `badge font-monospace rounded-0 ${count > 0 ? 'bg-primary text-white' : 'bg-secondary bg-opacity-10 text-secondary'}`;
 
-    const scanBtn = document.getElementById('scanBtn');
-    const fileSet = document.getElementById('fileInput').files.length > 0 || document.getElementById('fileName').textContent === 'demo_project_source.zip';
-
-    if (scanBtn) scanBtn.disabled = !(count > 0 && fileSet);
+    // Update scan button based on file and model selection
+    const consensusStrategy = document.querySelector('input[name="consensusStrategy"]:checked')?.value || 'union';
+    if (consensusStrategy !== 'cascade') {
+      const scanBtn = document.getElementById('scanBtn');
+      const fileSet = document.getElementById('fileInput').files.length > 0 || document.getElementById('fileName').textContent === 'demo_project_source.zip';
+      if (scanBtn) scanBtn.disabled = !(count > 0 && fileSet);
+    }
   }
 
   const dropArea = document.getElementById('dropArea');
@@ -268,6 +380,7 @@
       dropArea.classList.add('d-none');
       fileInfo.classList.remove('d-none');
       refreshModelPicker();
+      updateCascadeScanButton();  // Also update for cascade mode
     }
   });
 
@@ -277,27 +390,128 @@
     dropArea.classList.remove('d-none');
     fileInfo.classList.add('d-none');
     refreshModelPicker();
+    updateCascadeScanButton();  // Also update for cascade mode
   });
 
-  document.getElementById('loadSampleBtn').addEventListener('click', (e) => {
-    e.stopPropagation();
-    fileName.textContent = 'demo_project_source.zip';
-    frameSize.textContent = '4.2 MB';
-    dropArea.classList.add('d-none');
-    fileInfo.classList.remove('d-none');
-    refreshModelPicker();
-  });
+  const loadSampleBtn = document.getElementById('loadSampleBtn');
+  if (loadSampleBtn) {
+    loadSampleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileName.textContent = 'demo_project_source.zip';
+      frameSize.textContent = '4.2 MB';
+      dropArea.classList.add('d-none');
+      fileInfo.classList.remove('d-none');
+      refreshModelPicker();
+      updateCascadeScanButton();  // Also update for cascade mode
+    });
+  }
 
   document.querySelectorAll('input[name="consensusStrategy"]').forEach(radio => {
     radio.addEventListener('change', function () {
       const judgeDiv = document.getElementById('judgeModelSelect');
+      const cascadeDiv = document.getElementById('cascadeConfig');
+      const modelPickerCard = document.querySelector('#scanConfig .col-md-7');
+
       if (this.value === 'judge') {
         judgeDiv.classList.remove('d-none');
+        cascadeDiv.classList.add('d-none');
+        modelPickerCard.classList.remove('d-none');
+      } else if (this.value === 'cascade') {
+        judgeDiv.classList.add('d-none');
+        cascadeDiv.classList.remove('d-none');
+        modelPickerCard.classList.add('d-none');
+        populateCascadeModelPickers();
       } else {
         judgeDiv.classList.add('d-none');
+        cascadeDiv.classList.add('d-none');
+        modelPickerCard.classList.remove('d-none');
       }
+      updateCascadeScanButton();
     });
   });
+
+  // Cascade Model Picker Logic
+  function populateCascadeModelPickers() {
+    const sourceSelect = document.getElementById('modelsSelect');
+    const pass1Select = document.getElementById('pass1ModelsSelect');
+    const pass2Select = document.getElementById('pass2ModelsSelect');
+
+    if (!sourceSelect || !pass1Select || !pass2Select) return;
+
+    // Clone options to both pass selects
+    [pass1Select, pass2Select].forEach(targetSelect => {
+      targetSelect.innerHTML = '';
+      Array.from(sourceSelect.options).forEach(opt => {
+        const newOpt = document.createElement('option');
+        newOpt.value = opt.value;
+        newOpt.textContent = opt.textContent;
+        targetSelect.appendChild(newOpt);
+      });
+    });
+
+    refreshCascadeModelPicker('pass1');
+    refreshCascadeModelPicker('pass2');
+  }
+
+  function refreshCascadeModelPicker(passId) {
+    const picker = document.getElementById(`${passId}ModelPicker`);
+    const select = document.getElementById(`${passId}ModelsSelect`);
+    const badge = document.getElementById(`${passId}CountBadge`);
+
+    if (!picker || !select) return;
+
+    picker.innerHTML = '';
+    if (select.options.length === 0) {
+      picker.innerHTML = '<div class="text-muted small font-monospace w-100 text-center">NO_MODELS</div>';
+      return;
+    }
+
+    const colorClass = passId === 'pass1' ? 'warning' : 'info';
+
+    Array.from(select.options).forEach(opt => {
+      const chip = document.createElement('div');
+      const isSelected = opt.selected;
+      chip.className = `model-chip text-secondary border bg-surface px-2 py-1 rounded-1 d-flex align-items-center gap-1 extra-small font-monospace ${isSelected ? `active bg-${colorClass} bg-opacity-10 border-${colorClass} text-light` : 'border-subtle'}`;
+      chip.style.cursor = 'pointer';
+      chip.style.transition = 'all 0.15s ease';
+      chip.innerHTML = `<i class="bi ${isSelected ? 'bi-check-circle-fill' : 'bi-circle'}"></i> ${opt.text.split(' (')[0]}`;
+
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        opt.selected = !opt.selected;
+        refreshCascadeModelPicker(passId);
+        updateCascadeScanButton();
+      });
+
+      chip.addEventListener('mouseenter', () => {
+        if (!opt.selected) chip.style.borderColor = 'var(--bs-primary)';
+      });
+      chip.addEventListener('mouseleave', () => {
+        if (!opt.selected) chip.style.borderColor = '';
+      });
+
+      picker.appendChild(chip);
+    });
+
+    const count = Array.from(select.selectedOptions).length;
+    badge.textContent = `${count} SELECTED`;
+    badge.className = `badge font-monospace rounded-0 extra-small ${count > 0 ? `bg-${colorClass} text-dark` : `bg-${colorClass} bg-opacity-10 text-${colorClass}`}`;
+  }
+
+  function updateCascadeScanButton() {
+    const consensusStrategy = document.querySelector('input[name="consensusStrategy"]:checked')?.value;
+    if (consensusStrategy !== 'cascade') return;
+
+    const pass1Count = document.getElementById('pass1ModelsSelect')?.selectedOptions.length || 0;
+    const pass2Count = document.getElementById('pass2ModelsSelect')?.selectedOptions.length || 0;
+    const fileSet = document.getElementById('fileInput').files.length > 0 || document.getElementById('fileName').textContent === 'demo_project_source.zip';
+
+    const scanBtn = document.getElementById('scanBtn');
+    if (scanBtn) {
+      scanBtn.disabled = !(pass1Count > 0 && pass2Count > 0 && fileSet);
+    }
+  }
 </script>
 
 <div id="scanProgress" class="d-none"></div>
@@ -320,6 +534,22 @@
 </script>
 
 <style>
+  /* Cascade Model Chips */
+  .model-chip {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+  }
+  .model-chip:hover {
+    border-color: var(--bs-primary) !important;
+    transform: translateY(-1px);
+  }
+  .model-chip.active {
+    font-weight: 600;
+  }
+  #pass1ModelPicker, #pass2ModelPicker {
+    pointer-events: auto !important;
+  }
+
   .strategy-card input:checked~div i,
   .strategy-card input:checked~div div.fw-bold {
     color: var(--brand-primary) !important;

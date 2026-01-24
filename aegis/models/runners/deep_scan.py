@@ -75,12 +75,57 @@ Code to analyze:
 
 Return only the JSON payload. No prose."""
 
+    # Simplified prompt for small models (< 1B parameters)
+    # Must be very direct - small models struggle with complex instructions
+    SMALL_MODEL_PROMPT_TEMPLATE = """Task: Find security vulnerabilities in code and output JSON.
+
+Code:
+```
+{code}
+```
+
+If no vulnerabilities found, respond with exactly:
+{{"findings": []}}
+
+If vulnerabilities found, respond with:
+{{"findings": [{{"file_path": "{file_path}", "line_start": 1, "severity": "high", "category": "type", "description": "explain"}}]}}
+
+JSON response:"""
+
+    # Model name patterns that indicate a small model (< 1B params)
+    SMALL_MODEL_PATTERNS = [
+        "0.5b", "0.5-b", "500m", "350m", "125m",
+        "tiny", "mini", "nano", "micro",
+        "qwen2.5-0.5b", "phi-1", "phi-1.5",
+    ]
+
     def __init__(self, provider: Any, parser: Any, config: Optional[Dict[str, Any]] = None):
         """Initialize deep scan runner."""
         super().__init__(provider, parser, ModelRole.DEEP_SCAN, config)
+
+        # Check if this is a small model (uses simplified prompts)
+        # Can be set explicitly or detected from model name
+        self.is_small_model = self.config.get("small_model", False)
+
+        # Auto-detect small models from model name if not explicitly set
+        if not self.is_small_model:
+            model_name = self.config.get("model_name", "").lower()
+            model_id = self.config.get("model_id", "").lower()
+            combined = f"{model_name} {model_id}"
+            for pattern in self.SMALL_MODEL_PATTERNS:
+                if pattern in combined:
+                    self.is_small_model = True
+                    logger.info(f"Auto-detected small model from pattern '{pattern}': using simplified prompt")
+                    break
+
         tmpl = self.config.get("prompt_template")
         # Some configs may pass None; fall back to default
-        self.prompt_template = tmpl if tmpl else self.DEFAULT_PROMPT_TEMPLATE
+        if tmpl:
+            self.prompt_template = tmpl
+        elif self.is_small_model:
+            self.prompt_template = self.SMALL_MODEL_PROMPT_TEMPLATE
+        else:
+            self.prompt_template = self.DEFAULT_PROMPT_TEMPLATE
 
     def build_prompt(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Build a structured prompt for deep scan."""

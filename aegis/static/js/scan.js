@@ -57,6 +57,7 @@ async function loadModels() {
     }
 
     // Populate hidden select for form submission
+    console.log("[models-debug] Loaded models:", models.map(m => ({ id: m.model_id, name: m.display_name || m.model_name })));
     models.forEach(model => {
       const option = document.createElement("option");
       option.value = model.model_id || model.id || model.modelId || model.model_name;
@@ -146,26 +147,6 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
   e.preventDefault();
 
   const fileInput = document.getElementById("fileInput");
-  const modelsSelect = document.getElementById("modelsSelect");
-
-  // Get Values
-  const selectedModels = Array.from(modelsSelect.selectedOptions).map(opt => opt.value);
-
-  // Get Radio Value
-  const strategyInput = document.querySelector('input[name="consensusStrategy"]:checked');
-  const consensusStrategy = strategyInput ? strategyInput.value : 'union';
-
-  const judgeModelId = document.getElementById("judgeModelId")?.value;
-
-  if (selectedModels.length === 0) {
-    alert("SELECT_NEURAL_NET: Please active at least one model.");
-    return;
-  }
-
-  if (consensusStrategy === "judge" && !judgeModelId) {
-    alert("ARBITER_REQUIRED: Please select a judge model.");
-    return;
-  }
 
   if (!fileInput.files[0] && document.getElementById('fileName').textContent !== 'demo_project_source.zip') {
     alert("TARGET_MISSING: Please upload a source file.");
@@ -175,16 +156,61 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
   const formData = new FormData();
   if (fileInput.files[0]) {
     formData.append("file", fileInput.files[0]);
-  } else {
-    // Mock for Demo
-    // In a real app we'd handle this, for now we assume file is there or we just send empty
-    // If logic requires file, we might fail.
-    // Let's assume user uploaded a file for now as 'demo' wasn't fully wired to backend.
   }
 
-  formData.append("models", selectedModels.join(","));
-  formData.append("consensus_strategy", consensusStrategy);
-  if (judgeModelId) formData.append("judge_model_id", judgeModelId);
+  const endpoint = "/api/scan";
+
+  // Get consensus strategy
+  const strategyInput = document.querySelector('input[name="consensusStrategy"]:checked');
+  const consensusStrategy = strategyInput ? strategyInput.value : 'union';
+
+  if (consensusStrategy === "cascade") {
+    // Cascade consensus mode
+    const pass1Select = document.getElementById("pass1ModelsSelect");
+    const pass2Select = document.getElementById("pass2ModelsSelect");
+    const pass1Models = Array.from(pass1Select?.selectedOptions || []).map(opt => opt.value);
+    const pass2Models = Array.from(pass2Select?.selectedOptions || []).map(opt => opt.value);
+
+    // Debug: log selected model IDs
+    console.log("[cascade-debug] Pass 1 selected:", pass1Models);
+    console.log("[cascade-debug] Pass 2 selected:", pass2Models);
+
+    if (pass1Models.length === 0) {
+      alert("CASCADE_ERROR: Please select at least one Pass 1 model.");
+      return;
+    }
+    if (pass2Models.length === 0) {
+      alert("CASCADE_ERROR: Please select at least one Pass 2 model.");
+      return;
+    }
+
+    formData.append("consensus_strategy", "cascade");
+    formData.append("pass1_models", pass1Models.join(","));
+    formData.append("pass2_models", pass2Models.join(","));
+    formData.append("pass1_strategy", document.getElementById("pass1Strategy")?.value || "union");
+    formData.append("min_severity", document.getElementById("cascadeMinSeverity")?.value || "low");
+    formData.append("flag_any_finding", "true");
+
+  } else {
+    // Standard consensus modes (union, majority_vote, judge)
+    const modelsSelect = document.getElementById("modelsSelect");
+    const selectedModels = Array.from(modelsSelect.selectedOptions).map(opt => opt.value);
+    const judgeModelId = document.getElementById("judgeModelId")?.value;
+
+    if (selectedModels.length === 0) {
+      alert("SELECT_NEURAL_NET: Please activate at least one model.");
+      return;
+    }
+
+    if (consensusStrategy === "judge" && !judgeModelId) {
+      alert("ARBITER_REQUIRED: Please select a judge model.");
+      return;
+    }
+
+    formData.append("models", selectedModels.join(","));
+    formData.append("consensus_strategy", consensusStrategy);
+    if (judgeModelId) formData.append("judge_model_id", judgeModelId);
+  }
 
   // Show Loader (Shim handles trigger)
   const progressShim = document.getElementById("scanProgress");
@@ -194,7 +220,7 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
   if (scanBtn) scanBtn.disabled = true;
 
   try {
-    const response = await fetch("/api/scan", {
+    const response = await fetch(endpoint, {
       method: "POST",
       body: formData,
     });
@@ -202,7 +228,14 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
     const data = await response.json();
 
     if (data.error) {
-      alert("SYSTEM_ERROR: " + data.error);
+      let errorMsg = "SYSTEM_ERROR: " + data.error;
+      // Show debug info for cascade model errors
+      if (data.received && data.available) {
+        errorMsg += "\n\nReceived model IDs: " + JSON.stringify(data.received);
+        errorMsg += "\nAvailable model IDs: " + JSON.stringify(data.available);
+        console.error("Cascade model validation failed:", data);
+      }
+      alert(errorMsg);
       if (progressShim) progressShim.classList.add("d-none");
       if (scanBtn) scanBtn.disabled = false;
     } else {
@@ -213,12 +246,8 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
       } catch (e) {
         // Ignore storage errors
       }
-      // Redirect
-      window.location.href = `/scan/${data.scan_id}/progress`; // Original route
-      // Or `/scan/${data.scan_id}` if we want to go straight to report
-      // But typically we wait for completion.
-      // Given user wants "Vertical UI", maybe we stay on page?
-      // For now, keep standard flow.
+      // Redirect to progress page
+      window.location.href = `/scan/${data.scan_id}/progress`;
     }
   } catch (error) {
     alert("CONNECTION_FAILURE: " + error.message);

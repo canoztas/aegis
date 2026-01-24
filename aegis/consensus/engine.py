@@ -1,8 +1,11 @@
 """Consensus engine for merging findings from multiple models."""
 import hashlib
-from typing import Dict, List, Literal, Optional, Any
+from typing import Dict, List, Literal, Optional, Any, Set
 from aegis.data_models import Finding, ModelResponse
 from aegis.prompt_builder import PromptBuilder
+
+# Valid consensus strategies including the new cascade strategy
+CONSENSUS_STRATEGIES = ["union", "majority_vote", "weighted_vote", "judge", "cascade"]
 
 
 class ConsensusEngine:
@@ -15,7 +18,7 @@ class ConsensusEngine:
     def merge(
         self,
         model_responses: List[ModelResponse],
-        strategy: Literal["union", "majority_vote", "weighted_vote", "judge"] = "union",
+        strategy: Literal["union", "majority_vote", "weighted_vote", "judge", "cascade"] = "union",
         weights: Optional[Dict[str, float]] = None,
         judge_model: Optional[Any] = None,
         judge_request_params: Optional[Dict[str, Any]] = None,
@@ -42,6 +45,10 @@ class ConsensusEngine:
             return self._judge_strategy(
                 valid_responses, judge_model, judge_request_params or {}
             )
+        elif strategy == "cascade":
+            # Cascade strategy is handled at the scan service level, not here.
+            # If called directly, fall back to union for the current pass.
+            return self._union_strategy(valid_responses)
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
 

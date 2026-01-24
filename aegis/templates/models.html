@@ -43,6 +43,12 @@
             HUGGING_FACE
           </button>
         </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link py-3 px-4 font-monospace small text-uppercase" id="add-ml-tab" data-bs-toggle="tab"
+            data-bs-target="#add-ml" type="button" role="tab" aria-controls="add-ml" aria-selected="false">
+            ML_MODELS
+          </button>
+        </li>
       </ul>
     </div>
 
@@ -87,73 +93,133 @@
                   </div>
                   <div>
                     <h5 class="fw-bold text-light text-uppercase font-monospace mb-1">Register Cloud Model</h5>
-                    <p class="text-secondary small mb-0">Configure model and API key in one panel.</p>
+                    <p class="text-secondary small mb-0">Select a provider and model, then enter your API key.</p>
                   </div>
                 </div>
 
                 <div class="row g-3">
-                  <div class="col-md-4">
-                    <label class="form-label text-secondary small font-monospace mb-1">MODEL_TYPE</label>
+                  <!-- Provider Selection -->
+                  <div class="col-md-6">
+                    <label class="form-label text-secondary small font-monospace mb-1">PROVIDER</label>
                     <select class="form-select bg-app border-subtle text-light rounded-0 font-monospace"
-                      id="cloudProviderType">
-                      <option value="openai_cloud">OPENAI_CLOUD</option>
-                      <option value="anthropic_cloud">ANTHROPIC_CLOUD</option>
-                      <option value="google_cloud">GOOGLE_CLOUD</option>
-                      <option value="openai_compatible">OPENAI_COMPATIBLE</option>
+                      id="cloudProviderType" onchange="updateCloudModelPresets()">
+                      <option value="openai_cloud">OpenAI</option>
+                      <option value="anthropic_cloud">Anthropic</option>
+                      <option value="google_cloud">Google</option>
+                      <option value="openai_compatible">OpenAI Compatible</option>
                     </select>
                   </div>
-                  <div class="col-md-4">
-                    <label class="form-label text-secondary small font-monospace mb-1">PROVIDER_ID</label>
-                    <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
-                      id="cloudProviderId" placeholder="openai | anthropic | google">
-                  </div>
-                  <div class="col-md-4">
-                    <label class="form-label text-secondary small font-monospace mb-1">PARSER_ID</label>
-                    <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
-                      id="cloudParserId" placeholder="json_schema">
-                  </div>
+
+                  <!-- Model Preset -->
                   <div class="col-md-6">
-                    <label class="form-label text-secondary small font-monospace mb-1">MODEL_NAME</label>
-                    <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
-                      id="cloudModelName" placeholder="gpt-4o-mini">
+                    <label class="form-label text-secondary small font-monospace mb-1">MODEL</label>
+                    <select class="form-select bg-app border-subtle text-light rounded-0 font-monospace"
+                      id="cloudModelPreset" onchange="selectCloudModelPreset()">
+                      <option value="">-- Select Model --</option>
+                      <option value="gpt-4o">GPT-4o (Latest)</option>
+                      <option value="gpt-4o-mini">GPT-4o Mini (Fast)</option>
+                      <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                      <option value="custom">Custom Model...</option>
+                    </select>
                   </div>
-                  <div class="col-md-6">
-                    <label class="form-label text-secondary small font-monospace mb-1">DISPLAY_NAME</label>
+
+                  <!-- Custom Model Name (shown when "custom" selected) -->
+                  <div class="col-md-6 d-none" id="cloudCustomModelDiv">
+                    <label class="form-label text-secondary small font-monospace mb-1">CUSTOM_MODEL_NAME</label>
                     <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
-                      id="cloudDisplayName" placeholder="OpenAI GPT-4o mini">
+                      id="cloudModelName" placeholder="e.g. gpt-4o-2024-08-06">
                   </div>
+
+                  <!-- API Key -->
                   <div class="col-md-6">
                     <label class="form-label text-secondary small font-monospace mb-1">API_KEY</label>
                     <input type="password" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
                       id="cloudApiKey" placeholder="sk-...">
                   </div>
+
+                  <!-- Rate Limit -->
                   <div class="col-md-6">
-                    <label class="form-label text-secondary small font-monospace mb-1">BASE_URL</label>
-                    <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
-                      id="cloudBaseUrl" placeholder="http://localhost:8000/v1">
+                    <label class="form-label text-secondary small font-monospace mb-1">
+                      REQUEST_INTERVAL
+                      <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" title="Delay between API calls to avoid rate limits"></i>
+                    </label>
+                    <select class="form-select bg-app border-subtle text-light rounded-0 font-monospace"
+                      id="cloudRateLimit" onchange="toggleCustomRateLimit()">
+                      <option value="0">No delay</option>
+                      <option value="100">100ms (10 req/sec)</option>
+                      <option value="200">200ms (5 req/sec)</option>
+                      <option value="500">500ms (2 req/sec)</option>
+                      <option value="1000">1 second</option>
+                      <option value="2000">2 seconds</option>
+                      <option value="custom">Custom...</option>
+                    </select>
                   </div>
-                  <div class="col-12">
-                    <label class="form-label text-secondary small font-monospace mb-1">ROLES</label>
-                    <div class="d-flex flex-wrap gap-3">
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="triage" id="cloudRoleTriage">
-                        <label class="form-check-label text-light font-monospace small"
-                          for="cloudRoleTriage">TRIAGE</label>
+
+                  <!-- Custom Rate Limit -->
+                  <div class="col-md-6 d-none" id="cloudCustomRateLimitDiv">
+                    <label class="form-label text-secondary small font-monospace mb-1">CUSTOM_INTERVAL_MS</label>
+                    <input type="number" min="0" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
+                      id="cloudCustomRateLimit" placeholder="milliseconds between requests">
+                  </div>
+                </div>
+
+                <!-- Advanced Options (Collapsed) -->
+                <div class="mt-4">
+                  <button class="btn btn-link text-secondary p-0 font-monospace small text-decoration-none"
+                    type="button" data-bs-toggle="collapse" data-bs-target="#cloudAdvancedOptions">
+                    <i class="bi bi-gear me-1"></i>ADVANCED_OPTIONS <i class="bi bi-chevron-down ms-1"></i>
+                  </button>
+                  <div class="collapse mt-3" id="cloudAdvancedOptions">
+                    <div class="row g-3 p-3 bg-black bg-opacity-25 rounded-1">
+                      <div class="col-md-6">
+                        <label class="form-label text-secondary small font-monospace mb-1">DISPLAY_NAME</label>
+                        <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
+                          id="cloudDisplayName" placeholder="Optional friendly name">
                       </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="deep_scan" id="cloudRoleDeep" checked>
-                        <label class="form-check-label text-light font-monospace small"
-                          for="cloudRoleDeep">DEEP_SCAN</label>
+                      <div class="col-md-6">
+                        <label class="form-label text-secondary small font-monospace mb-1">BASE_URL</label>
+                        <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
+                          id="cloudBaseUrl" placeholder="For OpenAI-compatible endpoints">
                       </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="judge" id="cloudRoleJudge">
-                        <label class="form-check-label text-light font-monospace small"
-                          for="cloudRoleJudge">JUDGE</label>
+                      <div class="col-md-4">
+                        <label class="form-label text-secondary small font-monospace mb-1">PROVIDER_ID</label>
+                        <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
+                          id="cloudProviderId" placeholder="Auto-detected">
                       </div>
-                      <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="explain" id="cloudRoleExplain">
-                        <label class="form-check-label text-light font-monospace small"
-                          for="cloudRoleExplain">EXPLAIN</label>
+                      <div class="col-md-4">
+                        <label class="form-label text-secondary small font-monospace mb-1">PARSER_ID</label>
+                        <input type="text" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
+                          id="cloudParserId" placeholder="json_schema">
+                      </div>
+                      <div class="col-md-4">
+                        <label class="form-label text-secondary small font-monospace mb-1">MAX_TOKENS</label>
+                        <input type="number" min="0" class="form-control bg-app border-subtle text-light rounded-0 font-monospace"
+                          id="cloudMaxTokens" placeholder="4096">
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label text-secondary small font-monospace mb-1">ROLES</label>
+                        <div class="d-flex flex-wrap gap-3">
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="triage" id="cloudRoleTriage">
+                            <label class="form-check-label text-light font-monospace small"
+                              for="cloudRoleTriage">TRIAGE</label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="deep_scan" id="cloudRoleDeep" checked>
+                            <label class="form-check-label text-light font-monospace small"
+                              for="cloudRoleDeep">DEEP_SCAN</label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="judge" id="cloudRoleJudge">
+                            <label class="form-check-label text-light font-monospace small"
+                              for="cloudRoleJudge">JUDGE</label>
+                          </div>
+                          <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="explain" id="cloudRoleExplain">
+                            <label class="form-check-label text-light font-monospace small"
+                              for="cloudRoleExplain">EXPLAIN</label>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -196,6 +262,27 @@
                 onclick="loadHuggingFaceModels()">REFRESH LIBRARIES</button>
             </div>
             <div id="hfModelsList" class="row g-3"></div>
+          </div>
+        </div>
+
+        <!-- ML Models (Classic ML - sklearn, etc.) -->
+        <div class="tab-pane fade" id="add-ml" role="tabpanel" aria-labelledby="add-ml-tab">
+          <div class="p-4">
+            <!-- Pre-trained Model Presets -->
+            <div class="mb-4">
+              <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="font-monospace text-light mb-0"><i class="bi bi-stars me-2 text-warning"></i>PRE-TRAINED_MODELS</h6>
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-0 font-monospace"
+                  onclick="loadMLPresets()">REFRESH</button>
+              </div>
+              <div id="mlPresetsList" class="list-group list-group-flush">
+                <div class="d-flex flex-column align-items-center justify-content-center py-4">
+                  <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+                  <div class="font-monospace text-muted extra-small">LOADING_PRESETS...</div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
