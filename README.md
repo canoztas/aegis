@@ -15,7 +15,7 @@
 
 <h3>Aegis -of the vulnerable-</h3>
   
-![Aegis](https://img.shields.io/badge/aegis-Version_1.1-FFD700)
+[![Aegis](https://img.shields.io/badge/aegis-Version_1.1-FFD700)](https://github.com/canoztas/aegis)
 
 [![Blackhat Arsenal Asia 2026](https://img.shields.io/badge/Black%20Hat%20Arsenal-Asia%202026-blue.svg)](https://blackhat.com/asia-26/arsenal/schedule/index.html#aegis-llm-sast-framework-for-blacklight-code-hunts-50234)
 
