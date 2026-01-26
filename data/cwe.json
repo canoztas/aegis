@@ -1,4 +1,34 @@
 {
+  "CWE-20": {
+    "name": "Improper Input Validation",
+    "description": "Improper validation of input",
+    "patterns": ["missing input validation", "insufficient type checking", "no bounds checking"],
+    "remediation": "Validate all input, use strong typing, implement bounds checking, sanitize data"
+  },
+  "CWE-22": {
+    "name": "Path Traversal",
+    "description": "Improper limitation of a pathname to a restricted directory",
+    "patterns": ["file operations with user-controlled paths", "open() with user input", "path.join without validation", "../ in path"],
+    "remediation": "Validate and sanitize paths, use absolute paths with allowlists, chroot when possible"
+  },
+  "CWE-74": {
+    "name": "Injection",
+    "description": "Improper neutralization of special elements in output used by a downstream component",
+    "patterns": ["user input in commands", "unsanitized data in queries", "template injection"],
+    "remediation": "Use parameterized APIs, escape special characters, validate input format"
+  },
+  "CWE-77": {
+    "name": "Command Injection",
+    "description": "Improper neutralization of special elements used in a command",
+    "patterns": ["shell commands with user input", "backticks with user data", "exec with concatenation"],
+    "remediation": "Avoid shell commands, use parameterized APIs, strict input validation"
+  },
+  "CWE-78": {
+    "name": "OS Command Injection",
+    "description": "Improper neutralization of special elements used in an OS command",
+    "patterns": ["system() calls with user input", "subprocess with shell=True", "os.popen with user data"],
+    "remediation": "Use subprocess without shell, validate and sanitize input, use allowlists"
+  },
   "CWE-79": {
     "name": "Cross-site Scripting (XSS)",
     "description": "Improper neutralization of input during web page generation",
@@ -11,47 +41,59 @@
     "patterns": ["string concatenation in SQL queries", "raw SQL with user input", "execute() with format strings"],
     "remediation": "Use parameterized queries, prepared statements, or ORM methods"
   },
-  "CWE-78": {
-    "name": "OS Command Injection",
-    "description": "Improper neutralization of special elements used in an OS command",
-    "patterns": ["system() calls with user input", "subprocess with shell=True", "os.popen with user data"],
-    "remediation": "Use subprocess without shell, validate and sanitize input, use allowlists"
+  "CWE-94": {
+    "name": "Code Injection",
+    "description": "Improper control of generation of code",
+    "patterns": ["eval() with user input", "exec() with user data", "template injection", "dynamic code compilation"],
+    "remediation": "Avoid code execution with user input, use safe templating, sandbox execution"
   },
-  "CWE-22": {
-    "name": "Path Traversal",
-    "description": "Improper limitation of a pathname to a restricted directory",
-    "patterns": ["file operations with user-controlled paths", "open() with user input", "path.join without validation"],
-    "remediation": "Validate and sanitize paths, use absolute paths with allowlists, chroot when possible"
+  "CWE-119": {
+    "name": "Buffer Overflow",
+    "description": "Improper restriction of operations within the bounds of a memory buffer",
+    "patterns": ["strcpy without bounds", "memcpy with user-controlled size", "array access without bounds check"],
+    "remediation": "Use safe string functions (strncpy, snprintf), bounds checking, memory-safe languages"
   },
-  "CWE-502": {
-    "name": "Deserialization of Untrusted Data",
-    "description": "Deserialization of untrusted data without proper validation",
-    "patterns": ["pickle.loads() with user data", "yaml.load() with user input", "unmarshal() with untrusted data"],
-    "remediation": "Avoid deserializing untrusted data, use safe serialization formats (JSON), validate schemas"
+  "CWE-120": {
+    "name": "Classic Buffer Overflow",
+    "description": "Buffer copy without checking size of input",
+    "patterns": ["strcpy()", "gets()", "sprintf()", "scanf without width"],
+    "remediation": "Use strncpy, fgets, snprintf with explicit size limits"
   },
-  "CWE-352": {
-    "name": "Cross-Site Request Forgery (CSRF)",
-    "description": "Missing or improper validation of CSRF tokens",
-    "patterns": ["state-changing operations without CSRF tokens", "missing SameSite cookie attributes"],
-    "remediation": "Implement CSRF tokens, use SameSite cookies, verify origin headers"
+  "CWE-125": {
+    "name": "Out-of-bounds Read",
+    "description": "Reading data past the end or before the beginning of a buffer",
+    "patterns": ["array index from user input", "negative array index", "read past allocation"],
+    "remediation": "Validate array indices, use bounds-checked containers, sanitize indices"
   },
-  "CWE-434": {
-    "name": "Unrestricted Upload of File with Dangerous Type",
-    "description": "Upload of file with dangerous type without proper validation",
-    "patterns": ["file upload without type validation", "executable file uploads", "no file extension checks"],
-    "remediation": "Validate file types, use allowlists, scan for malware, store outside web root"
+  "CWE-190": {
+    "name": "Integer Overflow",
+    "description": "Integer overflow or wraparound",
+    "patterns": ["arithmetic without overflow check", "size calculation overflow", "length multiplication"],
+    "remediation": "Check for overflow before operations, use safe integer libraries, validate ranges"
   },
-  "CWE-798": {
-    "name": "Use of Hard-coded Credentials",
-    "description": "Use of hard-coded credentials in source code",
-    "patterns": ["passwords in source code", "API keys in code", "database credentials hardcoded"],
-    "remediation": "Use environment variables, secrets management, credential rotation"
+  "CWE-200": {
+    "name": "Information Exposure",
+    "description": "Exposure of sensitive information to unauthorized actors",
+    "patterns": ["sensitive data in responses", "verbose error messages", "debug info in production"],
+    "remediation": "Minimize data exposure, use generic error messages, disable debug in production"
   },
-  "CWE-327": {
-    "name": "Use of a Broken or Risky Cryptographic Algorithm",
-    "description": "Use of broken or risky cryptographic algorithm",
-    "patterns": ["MD5 or SHA1 for security", "DES encryption", "weak random number generators"],
-    "remediation": "Use modern algorithms (AES-256, SHA-256+), secure random generators, proper key management"
+  "CWE-209": {
+    "name": "Error Message Information Leak",
+    "description": "Error message contains sensitive information",
+    "patterns": ["stack traces to user", "database errors exposed", "file paths in errors"],
+    "remediation": "Use generic error messages, log details server-side only"
+  },
+  "CWE-287": {
+    "name": "Improper Authentication",
+    "description": "Failure to properly authenticate users",
+    "patterns": ["weak password requirements", "authentication bypass", "insecure remember me"],
+    "remediation": "Use strong authentication, MFA, secure session management"
+  },
+  "CWE-295": {
+    "name": "Improper Certificate Validation",
+    "description": "Failure to properly validate SSL/TLS certificates",
+    "patterns": ["verify=False", "InsecureRequestWarning ignored", "certificate errors suppressed"],
+    "remediation": "Always validate certificates, use trusted CA, pin certificates for sensitive connections"
   },
   "CWE-306": {
     "name": "Missing Authentication for Critical Function",
@@ -59,35 +101,160 @@
     "patterns": ["admin endpoints without auth", "sensitive operations without login", "missing auth checks"],
     "remediation": "Require authentication for all sensitive operations, implement proper session management"
   },
-  "CWE-862": {
-    "name": "Missing Authorization",
-    "description": "Missing authorization check for sensitive operations",
-    "patterns": ["operations without permission checks", "missing role-based access control", "direct object references"],
-    "remediation": "Implement authorization checks, use role-based access control, validate permissions"
-  },
   "CWE-311": {
     "name": "Missing Encryption of Sensitive Data",
     "description": "Failure to encrypt sensitive data",
     "patterns": ["plaintext passwords", "unencrypted PII", "sensitive data in logs"],
     "remediation": "Encrypt sensitive data at rest and in transit, use strong encryption, protect keys"
   },
+  "CWE-319": {
+    "name": "Cleartext Transmission of Sensitive Information",
+    "description": "Transmitting sensitive data in cleartext",
+    "patterns": ["HTTP instead of HTTPS", "unencrypted socket", "FTP for sensitive data"],
+    "remediation": "Use TLS/HTTPS for all sensitive data, enforce secure transport"
+  },
+  "CWE-327": {
+    "name": "Use of a Broken or Risky Cryptographic Algorithm",
+    "description": "Use of broken or risky cryptographic algorithm",
+    "patterns": ["MD5 or SHA1 for security", "DES encryption", "weak random number generators", "ECB mode"],
+    "remediation": "Use modern algorithms (AES-256, SHA-256+), secure random generators, proper key management"
+  },
+  "CWE-352": {
+    "name": "Cross-Site Request Forgery (CSRF)",
+    "description": "Missing or improper validation of CSRF tokens",
+    "patterns": ["state-changing operations without CSRF tokens", "missing SameSite cookie attributes"],
+    "remediation": "Implement CSRF tokens, use SameSite cookies, verify origin headers"
+  },
+  "CWE-362": {
+    "name": "Race Condition",
+    "description": "Concurrent execution using shared resource with improper synchronization",
+    "patterns": ["time-of-check to time-of-use (TOCTOU)", "unsynchronized access to shared data", "check-then-act without lock"],
+    "remediation": "Use proper synchronization, atomic operations, mutex/locks"
+  },
+  "CWE-384": {
+    "name": "Session Fixation",
+    "description": "Session identifier not regenerated after authentication",
+    "patterns": ["same session ID before and after login", "session not invalidated on logout"],
+    "remediation": "Regenerate session ID on authentication, invalidate on logout"
+  },
   "CWE-400": {
     "name": "Uncontrolled Resource Consumption",
     "description": "Uncontrolled resource consumption leading to DoS",
-    "patterns": ["unbounded loops", "large file processing without limits", "no rate limiting"],
+    "patterns": ["unbounded loops", "large file processing without limits", "no rate limiting", "regex DoS"],
     "remediation": "Implement resource limits, rate limiting, input validation, timeout mechanisms"
   },
-  "CWE-94": {
-    "name": "Code Injection",
-    "description": "Improper control of generation of code",
-    "patterns": ["eval() with user input", "exec() with user data", "template injection"],
-    "remediation": "Avoid code execution with user input, use safe templating, sandbox execution"
+  "CWE-401": {
+    "name": "Memory Leak",
+    "description": "Missing release of memory after effective lifetime",
+    "patterns": ["malloc without free", "new without delete", "reference cycles", "unclosed resources"],
+    "remediation": "Use RAII, smart pointers, ensure cleanup in error paths"
   },
-  "CWE-20": {
-    "name": "Improper Input Validation",
-    "description": "Improper validation of input",
-    "patterns": ["missing input validation", "insufficient type checking", "no bounds checking"],
-    "remediation": "Validate all input, use strong typing, implement bounds checking, sanitize data"
+  "CWE-415": {
+    "name": "Double Free",
+    "description": "Freeing memory that has already been freed",
+    "patterns": ["free() called twice", "delete on already deleted", "use after free then free"],
+    "remediation": "Set pointers to NULL after free, use smart pointers, ownership tracking"
+  },
+  "CWE-416": {
+    "name": "Use After Free",
+    "description": "Referencing memory after it has been freed",
+    "patterns": ["access after free()", "dangling pointer dereference", "callback after object destruction"],
+    "remediation": "Nullify pointers after free, use smart pointers, avoid raw pointers"
+  },
+  "CWE-434": {
+    "name": "Unrestricted Upload of File with Dangerous Type",
+    "description": "Upload of file with dangerous type without proper validation",
+    "patterns": ["file upload without type validation", "executable file uploads", "no file extension checks"],
+    "remediation": "Validate file types, use allowlists, scan for malware, store outside web root"
+  },
+  "CWE-476": {
+    "name": "NULL Pointer Dereference",
+    "description": "Dereferencing a NULL pointer",
+    "patterns": ["unchecked return value", "dereference before NULL check", "missing NULL validation"],
+    "remediation": "Always check for NULL before dereference, use references instead of pointers"
+  },
+  "CWE-502": {
+    "name": "Deserialization of Untrusted Data",
+    "description": "Deserialization of untrusted data without proper validation",
+    "patterns": ["pickle.loads() with user data", "yaml.load() with user input", "ObjectInputStream with untrusted data"],
+    "remediation": "Avoid deserializing untrusted data, use safe serialization formats (JSON), validate schemas"
+  },
+  "CWE-532": {
+    "name": "Information Leak Through Log Files",
+    "description": "Logging sensitive information",
+    "patterns": ["passwords in logs", "tokens logged", "PII in debug output", "credentials in error logs"],
+    "remediation": "Redact sensitive data from logs, use structured logging, audit log contents"
+  },
+  "CWE-601": {
+    "name": "Open Redirect",
+    "description": "URL redirection to untrusted site",
+    "patterns": ["redirect URL from user input", "unvalidated redirect parameter", "Location header from request"],
+    "remediation": "Validate redirect URLs against allowlist, use relative paths, warn users"
+  },
+  "CWE-611": {
+    "name": "XML External Entity (XXE)",
+    "description": "Improper restriction of XML external entity reference",
+    "patterns": ["XML parsing with external entities enabled", "DOCTYPE with ENTITY", "untrusted XML input"],
+    "remediation": "Disable external entities in XML parsers, use JSON instead, validate XML input"
+  },
+  "CWE-613": {
+    "name": "Insufficient Session Expiration",
+    "description": "Session does not expire or has excessive timeout",
+    "patterns": ["no session timeout", "very long session duration", "session persists after password change"],
+    "remediation": "Implement appropriate session timeouts, invalidate on security events"
+  },
+  "CWE-639": {
+    "name": "Authorization Bypass Through User-Controlled Key (IDOR)",
+    "description": "Access control based on user-supplied identifier without ownership verification",
+    "patterns": ["user ID from request without ownership check", "direct database lookup with user-supplied ID", "resource access by guessable ID"],
+    "remediation": "Always verify the current user owns/can access the requested resource, use indirect references"
+  },
+  "CWE-770": {
+    "name": "Allocation of Resources Without Limits",
+    "description": "Allocating resources without imposing limits",
+    "patterns": ["unlimited file uploads", "unbounded array allocation", "no limit on connections", "unlimited API calls"],
+    "remediation": "Implement quotas, limits, and throttling on all resource allocation"
+  },
+  "CWE-787": {
+    "name": "Out-of-bounds Write",
+    "description": "Writing data past the end or before the beginning of a buffer",
+    "patterns": ["buffer overflow on write", "array index overflow", "heap overflow"],
+    "remediation": "Use bounds checking, safe functions, memory-safe languages"
+  },
+  "CWE-798": {
+    "name": "Use of Hard-coded Credentials",
+    "description": "Use of hard-coded credentials in source code",
+    "patterns": ["passwords in source code", "API keys in code", "database credentials hardcoded", "secret in config file"],
+    "remediation": "Use environment variables, secrets management, credential rotation"
+  },
+  "CWE-840": {
+    "name": "Business Logic Errors",
+    "description": "Flaws in business logic that allow unintended behavior",
+    "patterns": ["price manipulation", "quantity bypass", "negative values accepted", "workflow state bypass", "discount stacking"],
+    "remediation": "Validate business rules server-side, use transactions, audit critical operations, test edge cases"
+  },
+  "CWE-841": {
+    "name": "Improper Enforcement of Behavioral Workflow",
+    "description": "Allowing workflow steps to be skipped or reordered",
+    "patterns": ["checkout without payment", "verification step skippable", "approval bypass", "state machine violations"],
+    "remediation": "Enforce workflow server-side, validate state transitions, use state machines"
+  },
+  "CWE-862": {
+    "name": "Missing Authorization",
+    "description": "Missing authorization check for sensitive operations",
+    "patterns": ["operations without permission checks", "missing role-based access control", "direct object references"],
+    "remediation": "Implement authorization checks, use role-based access control, validate permissions"
+  },
+  "CWE-863": {
+    "name": "Incorrect Authorization",
+    "description": "Authorization check performed incorrectly",
+    "patterns": ["wrong permission checked", "authorization logic error", "privilege escalation", "role confusion"],
+    "remediation": "Review authorization logic, use deny-by-default, test authorization thoroughly"
+  },
+  "CWE-918": {
+    "name": "Server-Side Request Forgery (SSRF)",
+    "description": "Server makes requests to user-controlled URLs",
+    "patterns": ["URL from user input in server request", "fetch/curl with user URL", "image proxy with user URL"],
+    "remediation": "Validate and allowlist URLs, block internal IPs, use URL parsers"
   }
 }
-

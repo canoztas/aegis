@@ -141,16 +141,54 @@ Return only JSON."""
         
         # Language-specific CWE mappings
         mappings = {
-            "python": ["CWE-78", "CWE-22", "CWE-502", "CWE-20", "CWE-94"],
-            "javascript": ["CWE-79", "CWE-89", "CWE-352", "CWE-20"],
-            "typescript": ["CWE-79", "CWE-89", "CWE-352", "CWE-20"],
-            "java": ["CWE-89", "CWE-502", "CWE-22", "CWE-20"],
-            "php": ["CWE-79", "CWE-89", "CWE-434", "CWE-20"],
-            "go": ["CWE-78", "CWE-22", "CWE-20"],
-            "rust": ["CWE-22", "CWE-400", "CWE-20"],
-            "c": ["CWE-78", "CWE-22", "CWE-400"],
-            "cpp": ["CWE-78", "CWE-22", "CWE-400"],
-            "csharp": ["CWE-89", "CWE-502", "CWE-22"],
+            "python": [
+                "CWE-78", "CWE-22", "CWE-502", "CWE-20", "CWE-94",  # injection, path, deserialization
+                "CWE-918", "CWE-639", "CWE-862", "CWE-295", "CWE-532",  # SSRF, IDOR, auth, certs, logs
+            ],
+            "javascript": [
+                "CWE-79", "CWE-89", "CWE-352", "CWE-20",  # XSS, SQLi, CSRF, input
+                "CWE-601", "CWE-918", "CWE-639", "CWE-862", "CWE-94",  # redirect, SSRF, IDOR, auth, eval
+            ],
+            "typescript": [
+                "CWE-79", "CWE-89", "CWE-352", "CWE-20",  # XSS, SQLi, CSRF, input
+                "CWE-601", "CWE-918", "CWE-639", "CWE-862", "CWE-94",  # redirect, SSRF, IDOR, auth, eval
+            ],
+            "java": [
+                "CWE-89", "CWE-502", "CWE-22", "CWE-20",  # SQLi, deserialization, path, input
+                "CWE-611", "CWE-918", "CWE-639", "CWE-862", "CWE-287",  # XXE, SSRF, IDOR, auth
+            ],
+            "php": [
+                "CWE-79", "CWE-89", "CWE-434", "CWE-20", "CWE-78",  # XSS, SQLi, upload, input, cmd
+                "CWE-502", "CWE-601", "CWE-918", "CWE-862", "CWE-639",  # deser, redirect, SSRF, auth, IDOR
+            ],
+            "go": [
+                "CWE-78", "CWE-22", "CWE-20",  # cmd injection, path, input
+                "CWE-918", "CWE-295", "CWE-362", "CWE-862", "CWE-639",  # SSRF, certs, race, auth, IDOR
+            ],
+            "rust": [
+                "CWE-22", "CWE-400", "CWE-20",  # path, resource, input
+                "CWE-362", "CWE-918", "CWE-862", "CWE-639",  # race, SSRF, auth, IDOR
+            ],
+            "c": [
+                "CWE-119", "CWE-120", "CWE-125", "CWE-787",  # buffer overflows, OOB read/write
+                "CWE-190", "CWE-416", "CWE-476", "CWE-78", "CWE-22",  # integer, UAF, NULL, cmd, path
+            ],
+            "cpp": [
+                "CWE-119", "CWE-120", "CWE-125", "CWE-787",  # buffer overflows, OOB read/write
+                "CWE-190", "CWE-416", "CWE-415", "CWE-476", "CWE-401",  # integer, UAF, double-free, NULL, leak
+            ],
+            "csharp": [
+                "CWE-89", "CWE-502", "CWE-22", "CWE-79",  # SQLi, deserialization, path, XSS
+                "CWE-611", "CWE-918", "CWE-639", "CWE-862", "CWE-287",  # XXE, SSRF, IDOR, auth
+            ],
+            "ruby": [
+                "CWE-78", "CWE-89", "CWE-79", "CWE-20", "CWE-94",  # cmd, SQLi, XSS, input, eval
+                "CWE-502", "CWE-918", "CWE-639", "CWE-862",  # deserialization, SSRF, IDOR, auth
+            ],
+            "kotlin": [
+                "CWE-89", "CWE-502", "CWE-22", "CWE-20",  # SQLi, deserialization, path, input
+                "CWE-611", "CWE-918", "CWE-639", "CWE-862",  # XXE, SSRF, IDOR, auth
+            ],
         }
         
         # Try exact match first
@@ -162,8 +200,8 @@ Return only JSON."""
             if lang_key in language_lower or language_lower in lang_key:
                 return cwes
         
-        # Default to common CWEs
-        return ["CWE-20", "CWE-79", "CWE-89"]
+        # Default to common CWEs (input validation, XSS, SQLi, auth, IDOR)
+        return ["CWE-20", "CWE-79", "CWE-89", "CWE-862", "CWE-639"]
 
     def build_prompt(self, request: ModelRequest) -> str:
         """Build complete prompt from request."""
