@@ -1,0 +1,596 @@
+{
+  "CWE-20": {
+    "name": "Improper Input Validation",
+    "full_name": "Improper Input Validation",
+    "severity": "high",
+    "category": "input_validation"
+  },
+  "CWE-22": {
+    "name": "Path Traversal",
+    "full_name": "Improper Limitation of a Pathname to a Restricted Directory",
+    "severity": "high",
+    "category": "path_traversal"
+  },
+  "CWE-74": {
+    "name": "Injection",
+    "full_name": "Improper Neutralization of Special Elements in Output Used by a Downstream Component",
+    "severity": "high",
+    "category": "injection"
+  },
+  "CWE-77": {
+    "name": "Command Injection",
+    "full_name": "Improper Neutralization of Special Elements used in a Command",
+    "severity": "critical",
+    "category": "injection"
+  },
+  "CWE-78": {
+    "name": "OS Command Injection",
+    "full_name": "Improper Neutralization of Special Elements used in an OS Command",
+    "severity": "critical",
+    "category": "injection"
+  },
+  "CWE-79": {
+    "name": "Cross-site Scripting (XSS)",
+    "full_name": "Improper Neutralization of Input During Web Page Generation",
+    "severity": "medium",
+    "category": "injection"
+  },
+  "CWE-89": {
+    "name": "SQL Injection",
+    "full_name": "Improper Neutralization of Special Elements used in an SQL Command",
+    "severity": "critical",
+    "category": "injection"
+  },
+  "CWE-94": {
+    "name": "Code Injection",
+    "full_name": "Improper Control of Generation of Code",
+    "severity": "critical",
+    "category": "injection"
+  },
+  "CWE-119": {
+    "name": "Buffer Overflow",
+    "full_name": "Improper Restriction of Operations within the Bounds of a Memory Buffer",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-120": {
+    "name": "Classic Buffer Overflow",
+    "full_name": "Buffer Copy without Checking Size of Input",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-121": {
+    "name": "Stack-based Buffer Overflow",
+    "full_name": "Stack-based Buffer Overflow",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-122": {
+    "name": "Heap-based Buffer Overflow",
+    "full_name": "Heap-based Buffer Overflow",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-125": {
+    "name": "Out-of-bounds Read",
+    "full_name": "Out-of-bounds Read",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-126": {
+    "name": "Buffer Over-read",
+    "full_name": "Buffer Over-read",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-127": {
+    "name": "Buffer Under-read",
+    "full_name": "Buffer Under-read",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-129": {
+    "name": "Improper Array Index Validation",
+    "full_name": "Improper Validation of Array Index",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-131": {
+    "name": "Incorrect Buffer Size Calculation",
+    "full_name": "Incorrect Calculation of Buffer Size",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-134": {
+    "name": "Format String Vulnerability",
+    "full_name": "Use of Externally-Controlled Format String",
+    "severity": "high",
+    "category": "injection"
+  },
+  "CWE-138": {
+    "name": "Improper Neutralization of Special Elements",
+    "full_name": "Improper Neutralization of Special Elements",
+    "severity": "medium",
+    "category": "injection"
+  },
+  "CWE-170": {
+    "name": "Improper Null Termination",
+    "full_name": "Improper Null Termination",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-187": {
+    "name": "Partial String Comparison",
+    "full_name": "Partial String Comparison",
+    "severity": "medium",
+    "category": "logic"
+  },
+  "CWE-189": {
+    "name": "Numeric Errors",
+    "full_name": "Numeric Errors",
+    "severity": "medium",
+    "category": "numeric"
+  },
+  "CWE-190": {
+    "name": "Integer Overflow",
+    "full_name": "Integer Overflow or Wraparound",
+    "severity": "high",
+    "category": "numeric"
+  },
+  "CWE-191": {
+    "name": "Integer Underflow",
+    "full_name": "Integer Underflow (Wrap or Wraparound)",
+    "severity": "high",
+    "category": "numeric"
+  },
+  "CWE-193": {
+    "name": "Off-by-one Error",
+    "full_name": "Off-by-one Error",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-200": {
+    "name": "Information Exposure",
+    "full_name": "Exposure of Sensitive Information to an Unauthorized Actor",
+    "severity": "medium",
+    "category": "information_disclosure"
+  },
+  "CWE-221": {
+    "name": "Information Loss or Omission",
+    "full_name": "Information Loss or Omission",
+    "severity": "low",
+    "category": "logic"
+  },
+  "CWE-252": {
+    "name": "Unchecked Return Value",
+    "full_name": "Unchecked Return Value",
+    "severity": "medium",
+    "category": "error_handling"
+  },
+  "CWE-264": {
+    "name": "Permissions, Privileges, Access Control",
+    "full_name": "Permissions, Privileges, and Access Controls",
+    "severity": "high",
+    "category": "access_control"
+  },
+  "CWE-269": {
+    "name": "Improper Privilege Management",
+    "full_name": "Improper Privilege Management",
+    "severity": "high",
+    "category": "access_control"
+  },
+  "CWE-284": {
+    "name": "Improper Access Control",
+    "full_name": "Improper Access Control",
+    "severity": "high",
+    "category": "access_control"
+  },
+  "CWE-285": {
+    "name": "Improper Authorization",
+    "full_name": "Improper Authorization",
+    "severity": "high",
+    "category": "access_control"
+  },
+  "CWE-287": {
+    "name": "Improper Authentication",
+    "full_name": "Improper Authentication",
+    "severity": "high",
+    "category": "authentication"
+  },
+  "CWE-295": {
+    "name": "Improper Certificate Validation",
+    "full_name": "Improper Certificate Validation",
+    "severity": "high",
+    "category": "cryptography"
+  },
+  "CWE-306": {
+    "name": "Missing Authentication",
+    "full_name": "Missing Authentication for Critical Function",
+    "severity": "critical",
+    "category": "authentication"
+  },
+  "CWE-310": {
+    "name": "Cryptographic Issues",
+    "full_name": "Cryptographic Issues",
+    "severity": "high",
+    "category": "cryptography"
+  },
+  "CWE-311": {
+    "name": "Missing Encryption",
+    "full_name": "Missing Encryption of Sensitive Data",
+    "severity": "high",
+    "category": "cryptography"
+  },
+  "CWE-319": {
+    "name": "Cleartext Transmission",
+    "full_name": "Cleartext Transmission of Sensitive Information",
+    "severity": "high",
+    "category": "cryptography"
+  },
+  "CWE-326": {
+    "name": "Inadequate Encryption Strength",
+    "full_name": "Inadequate Encryption Strength",
+    "severity": "medium",
+    "category": "cryptography"
+  },
+  "CWE-327": {
+    "name": "Broken Cryptographic Algorithm",
+    "full_name": "Use of a Broken or Risky Cryptographic Algorithm",
+    "severity": "high",
+    "category": "cryptography"
+  },
+  "CWE-330": {
+    "name": "Insufficient Randomness",
+    "full_name": "Use of Insufficiently Random Values",
+    "severity": "medium",
+    "category": "cryptography"
+  },
+  "CWE-347": {
+    "name": "Improper Signature Verification",
+    "full_name": "Improper Verification of Cryptographic Signature",
+    "severity": "high",
+    "category": "cryptography"
+  },
+  "CWE-352": {
+    "name": "Cross-Site Request Forgery (CSRF)",
+    "full_name": "Cross-Site Request Forgery",
+    "severity": "medium",
+    "category": "web"
+  },
+  "CWE-362": {
+    "name": "Race Condition",
+    "full_name": "Concurrent Execution using Shared Resource with Improper Synchronization",
+    "severity": "medium",
+    "category": "concurrency"
+  },
+  "CWE-369": {
+    "name": "Divide By Zero",
+    "full_name": "Divide By Zero",
+    "severity": "medium",
+    "category": "numeric"
+  },
+  "CWE-384": {
+    "name": "Session Fixation",
+    "full_name": "Session Fixation",
+    "severity": "medium",
+    "category": "session"
+  },
+  "CWE-399": {
+    "name": "Resource Management Errors",
+    "full_name": "Resource Management Errors",
+    "severity": "medium",
+    "category": "resource"
+  },
+  "CWE-400": {
+    "name": "Uncontrolled Resource Consumption",
+    "full_name": "Uncontrolled Resource Consumption",
+    "severity": "medium",
+    "category": "resource"
+  },
+  "CWE-401": {
+    "name": "Memory Leak",
+    "full_name": "Missing Release of Memory after Effective Lifetime",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-404": {
+    "name": "Improper Resource Shutdown",
+    "full_name": "Improper Resource Shutdown or Release",
+    "severity": "medium",
+    "category": "resource"
+  },
+  "CWE-415": {
+    "name": "Double Free",
+    "full_name": "Double Free",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-416": {
+    "name": "Use After Free",
+    "full_name": "Use After Free",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-426": {
+    "name": "Untrusted Search Path",
+    "full_name": "Untrusted Search Path",
+    "severity": "high",
+    "category": "path_traversal"
+  },
+  "CWE-427": {
+    "name": "Uncontrolled Search Path",
+    "full_name": "Uncontrolled Search Path Element",
+    "severity": "high",
+    "category": "path_traversal"
+  },
+  "CWE-434": {
+    "name": "Unrestricted File Upload",
+    "full_name": "Unrestricted Upload of File with Dangerous Type",
+    "severity": "high",
+    "category": "file"
+  },
+  "CWE-457": {
+    "name": "Use of Uninitialized Variable",
+    "full_name": "Use of Uninitialized Variable",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-459": {
+    "name": "Incomplete Cleanup",
+    "full_name": "Incomplete Cleanup",
+    "severity": "low",
+    "category": "resource"
+  },
+  "CWE-467": {
+    "name": "Use of sizeof() on Pointer",
+    "full_name": "Use of sizeof() on a Pointer Type",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-469": {
+    "name": "Use of Pointer Subtraction",
+    "full_name": "Use of Pointer Subtraction to Determine Size",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-471": {
+    "name": "Modification of Assumed-Immutable Data",
+    "full_name": "Modification of Assumed-Immutable Data",
+    "severity": "medium",
+    "category": "logic"
+  },
+  "CWE-476": {
+    "name": "NULL Pointer Dereference",
+    "full_name": "NULL Pointer Dereference",
+    "severity": "medium",
+    "category": "memory"
+  },
+  "CWE-502": {
+    "name": "Deserialization of Untrusted Data",
+    "full_name": "Deserialization of Untrusted Data",
+    "severity": "critical",
+    "category": "injection"
+  },
+  "CWE-506": {
+    "name": "Embedded Malicious Code",
+    "full_name": "Embedded Malicious Code",
+    "severity": "critical",
+    "category": "malware"
+  },
+  "CWE-532": {
+    "name": "Information Exposure Through Log Files",
+    "full_name": "Insertion of Sensitive Information into Log File",
+    "severity": "medium",
+    "category": "information_disclosure"
+  },
+  "CWE-552": {
+    "name": "Files Accessible to External Parties",
+    "full_name": "Files or Directories Accessible to External Parties",
+    "severity": "medium",
+    "category": "file"
+  },
+  "CWE-565": {
+    "name": "Cookie Without Validation",
+    "full_name": "Reliance on Cookies without Validation and Integrity Checking",
+    "severity": "medium",
+    "category": "session"
+  },
+  "CWE-573": {
+    "name": "Improper Following of Specification",
+    "full_name": "Improper Following of Specification by Caller",
+    "severity": "medium",
+    "category": "logic"
+  },
+  "CWE-601": {
+    "name": "Open Redirect",
+    "full_name": "URL Redirection to Untrusted Site",
+    "severity": "medium",
+    "category": "web"
+  },
+  "CWE-610": {
+    "name": "Externally Controlled Reference",
+    "full_name": "Externally Controlled Reference to a Resource in Another Sphere",
+    "severity": "high",
+    "category": "injection"
+  },
+  "CWE-611": {
+    "name": "XXE (XML External Entity)",
+    "full_name": "Improper Restriction of XML External Entity Reference",
+    "severity": "high",
+    "category": "injection"
+  },
+  "CWE-617": {
+    "name": "Reachable Assertion",
+    "full_name": "Reachable Assertion",
+    "severity": "medium",
+    "category": "error_handling"
+  },
+  "CWE-662": {
+    "name": "Improper Synchronization",
+    "full_name": "Improper Synchronization",
+    "severity": "medium",
+    "category": "concurrency"
+  },
+  "CWE-665": {
+    "name": "Improper Initialization",
+    "full_name": "Improper Initialization",
+    "severity": "medium",
+    "category": "initialization"
+  },
+  "CWE-666": {
+    "name": "Operation on Resource in Wrong Phase",
+    "full_name": "Operation on Resource in Wrong Phase of Lifetime",
+    "severity": "medium",
+    "category": "resource"
+  },
+  "CWE-668": {
+    "name": "Exposure to Wrong Sphere",
+    "full_name": "Exposure of Resource to Wrong Sphere",
+    "severity": "medium",
+    "category": "information_disclosure"
+  },
+  "CWE-670": {
+    "name": "Always-Incorrect Control Flow",
+    "full_name": "Always-Incorrect Control Flow Implementation",
+    "severity": "medium",
+    "category": "logic"
+  },
+  "CWE-673": {
+    "name": "External Influence of Sphere Definition",
+    "full_name": "External Influence of Sphere Definition",
+    "severity": "medium",
+    "category": "logic"
+  },
+  "CWE-674": {
+    "name": "Uncontrolled Recursion",
+    "full_name": "Uncontrolled Recursion",
+    "severity": "medium",
+    "category": "resource"
+  },
+  "CWE-676": {
+    "name": "Use of Potentially Dangerous Function",
+    "full_name": "Use of Potentially Dangerous Function",
+    "severity": "medium",
+    "category": "code_quality"
+  },
+  "CWE-682": {
+    "name": "Incorrect Calculation",
+    "full_name": "Incorrect Calculation",
+    "severity": "medium",
+    "category": "numeric"
+  },
+  "CWE-704": {
+    "name": "Incorrect Type Conversion",
+    "full_name": "Incorrect Type Conversion or Cast",
+    "severity": "medium",
+    "category": "type"
+  },
+  "CWE-706": {
+    "name": "Use of Incorrectly-Resolved Name",
+    "full_name": "Use of Incorrectly-Resolved Name or Reference",
+    "severity": "high",
+    "category": "logic"
+  },
+  "CWE-732": {
+    "name": "Incorrect Permission Assignment",
+    "full_name": "Incorrect Permission Assignment for Critical Resource",
+    "severity": "high",
+    "category": "access_control"
+  },
+  "CWE-754": {
+    "name": "Improper Check for Unusual Conditions",
+    "full_name": "Improper Check for Unusual or Exceptional Conditions",
+    "severity": "medium",
+    "category": "error_handling"
+  },
+  "CWE-755": {
+    "name": "Improper Exception Handling",
+    "full_name": "Improper Handling of Exceptional Conditions",
+    "severity": "medium",
+    "category": "error_handling"
+  },
+  "CWE-758": {
+    "name": "Reliance on Undefined Behavior",
+    "full_name": "Reliance on Undefined, Unspecified, or Implementation-Defined Behavior",
+    "severity": "medium",
+    "category": "logic"
+  },
+  "CWE-763": {
+    "name": "Release of Invalid Pointer",
+    "full_name": "Release of Invalid Pointer or Reference",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-770": {
+    "name": "Allocation Without Limits",
+    "full_name": "Allocation of Resources Without Limits or Throttling",
+    "severity": "medium",
+    "category": "resource"
+  },
+  "CWE-772": {
+    "name": "Missing Resource Release",
+    "full_name": "Missing Release of Resource after Effective Lifetime",
+    "severity": "medium",
+    "category": "resource"
+  },
+  "CWE-787": {
+    "name": "Out-of-bounds Write",
+    "full_name": "Out-of-bounds Write",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-798": {
+    "name": "Hard-coded Credentials",
+    "full_name": "Use of Hard-coded Credentials",
+    "severity": "critical",
+    "category": "authentication"
+  },
+  "CWE-824": {
+    "name": "Access of Uninitialized Pointer",
+    "full_name": "Access of Uninitialized Pointer",
+    "severity": "high",
+    "category": "memory"
+  },
+  "CWE-834": {
+    "name": "Excessive Iteration",
+    "full_name": "Excessive Iteration",
+    "severity": "medium",
+    "category": "resource"
+  },
+  "CWE-835": {
+    "name": "Infinite Loop",
+    "full_name": "Loop with Unreachable Exit Condition",
+    "severity": "medium",
+    "category": "logic"
+  },
+  "CWE-862": {
+    "name": "Missing Authorization",
+    "full_name": "Missing Authorization",
+    "severity": "high",
+    "category": "access_control"
+  },
+  "CWE-863": {
+    "name": "Incorrect Authorization",
+    "full_name": "Incorrect Authorization",
+    "severity": "high",
+    "category": "access_control"
+  },
+  "CWE-908": {
+    "name": "Use of Uninitialized Resource",
+    "full_name": "Use of Uninitialized Resource",
+    "severity": "medium",
+    "category": "initialization"
+  },
+  "CWE-909": {
+    "name": "Missing Initialization",
+    "full_name": "Missing Initialization of Resource",
+    "severity": "medium",
+    "category": "initialization"
+  },
+  "CWE-918": {
+    "name": "Server-Side Request Forgery (SSRF)",
+    "full_name": "Server-Side Request Forgery",
+    "severity": "high",
+    "category": "web"
+  }
+}

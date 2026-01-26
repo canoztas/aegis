@@ -12,14 +12,19 @@ RUN apt-get update && apt-get install -y \
 # Install uv
 RUN pip install --no-cache-dir uv
 
-# Copy dependency files
+# Copy dependency files first (for layer caching)
 COPY pyproject.toml uv.lock ./
 
-# Install Python dependencies
-RUN uv sync --frozen
+# Export dependencies to requirements.txt and install system-wide
+# This leverages Docker layer caching - deps only reinstall when lock file changes
+RUN uv export --frozen --no-hashes -o requirements.txt && \
+    uv pip install --system -r requirements.txt
 
 # Copy application code
 COPY . .
+
+# Install the project itself (without deps, they're already installed)
+RUN uv pip install --system --no-deps .
 
 # Create necessary directories
 RUN mkdir -p /app/data /app/config /app/uploads
@@ -37,5 +42,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5000/health || exit 1
 
 # Run the application
-CMD ["uv", "run", "python", "app.py"]
-
+CMD ["python", "app.py"]

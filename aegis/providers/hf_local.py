@@ -620,7 +620,7 @@ class HFLocalProvider:
             with _torch.inference_mode():
                 outputs = self._model(**inputs)
 
-            # Check for multi-task output format (CodeBERT-PrimeVul)
+            # Check for multi-task output format (CodeBERT-PrimeVul, UnixCoder-PrimeVul)
             # These models return vul_logits and cwe_logits
             # Handle both dict and ModelOutput formats
             if isinstance(outputs, dict):
@@ -1384,10 +1384,15 @@ CODEASTRA_7B = {
     },
 }
 
-# CWE Index to ID mapping for CodeBERT-PrimeVul-BigVul model
-# This maps the 135 output classes (0-134) to CWE IDs
-# Index 0 = no CWE / not vulnerable, indices 1-134 = specific CWE types
-# Based on common CWEs from BigVul and PrimeVul datasets
+# CWE Index to ID mapping for CodeBERT-PrimeVul-BigVul and UnixCoder-PrimeVul models
+# These multi-task models output a CWE class index (0-134) instead of CWE ID strings.
+# This mapping converts model output indices to actual CWE IDs.
+#
+# IMPORTANT: This mapping was created based on common CWEs from BigVul/PrimeVul datasets.
+# The actual order depends on how sklearn.LabelEncoder sorted the CWE IDs during training.
+# To regenerate the accurate mapping, run: python scripts/extract_cwe_mapping.py
+#
+# For indices not in this mapping, the parser will return "CWE-Unknown-{index}"
 PRIMEVUL_CWE_MAPPING = {
     0: None,  # Not vulnerable / no CWE
     1: "CWE-119",  # Improper Restriction of Operations within the Bounds of a Memory Buffer

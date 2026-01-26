@@ -5,8 +5,42 @@ from typing import Any, Dict, Optional, List
 
 from aegis.models.schema import FindingCandidate, TriageSignal, ParserResult
 from aegis.models.parsers.base import BaseParser
+from aegis.utils.cwe_lookup import get_cwe_name, format_cwe
 
 logger = logging.getLogger(__name__)
+
+
+# Label normalization: Convert model labels to human-readable names
+LABEL_DISPLAY_NAMES = {
+    # Positive (vulnerable) labels
+    "LABEL_1": "Vulnerable",
+    "VULNERABLE": "Vulnerable",
+    "INSECURE": "Vulnerable",
+    "1": "Vulnerable",
+    "POSITIVE": "Vulnerable",
+    "TRUE": "Vulnerable",
+    # Negative (safe) labels
+    "LABEL_0": "Non-Vulnerable",
+    "SAFE": "Non-Vulnerable",
+    "SECURE": "Non-Vulnerable",
+    "0": "Non-Vulnerable",
+    "NEGATIVE": "Non-Vulnerable",
+    "FALSE": "Non-Vulnerable",
+    "NON-VULNERABLE": "Non-Vulnerable",
+}
+
+
+def _normalize_label(label: str) -> str:
+    """
+    Convert model label to human-readable name.
+
+    Args:
+        label: Raw label from model (e.g., "LABEL_1", "VULNERABLE")
+
+    Returns:
+        Human-readable label (e.g., "Vulnerable", "Non-Vulnerable")
+    """
+    return LABEL_DISPLAY_NAMES.get(label.upper(), label)
 
 
 class HFTextClassificationParser(BaseParser):
@@ -67,6 +101,7 @@ class HFTextClassificationParser(BaseParser):
         top_prediction = predictions[0]
 
         label = top_prediction.get("label", "").upper()
+        display_label = _normalize_label(label)  # "LABEL_1" -> "Vulnerable"
         score = top_prediction.get("score", 0.0)
 
         # Determine if suspicious
@@ -89,7 +124,7 @@ class HFTextClassificationParser(BaseParser):
         triage_signal = TriageSignal(
             is_suspicious=is_suspicious,
             confidence=score,
-            labels=[label] if not cwe else [label, cwe],
+            labels=[display_label] if not cwe else [display_label, cwe],
             suspicious_chunks=[context] if is_suspicious else [],
             metadata=triage_metadata,
         )
@@ -112,20 +147,25 @@ class HFTextClassificationParser(BaseParser):
 
             # Build description with CWE if available
             if cwe and cwe_score:
-                description = f"Code classified as {label} ({score:.2%}), CWE: {cwe} ({cwe_score:.2%})"
+                cwe_name = get_cwe_name(cwe)
+                cwe_display = format_cwe(cwe)  # "CWE-119: Buffer Overflow"
+                description = f"Code classified as {display_label} ({score:.2%}), {cwe_display} ({cwe_score:.2%})"
                 category = cwe  # Use CWE as category for better grouping
             else:
-                description = f"Code classified as {label} with confidence {score:.2%}"
+                cwe_name = None
+                description = f"Code classified as {display_label} with confidence {score:.2%}"
                 category = "potential_vulnerability"
 
             # Build metadata
             metadata = {
-                "label": label,
+                "label": label,  # Keep raw label for debugging
+                "display_label": display_label,  # Human-readable label
                 "all_predictions": predictions,
                 "source": "hf_classification",
             }
             if cwe:
                 metadata["cwe"] = cwe
+                metadata["cwe_name"] = cwe_name  # Human-readable CWE name
                 metadata["cwe_score"] = cwe_score
                 metadata["cwe_index"] = cwe_index
 

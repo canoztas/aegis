@@ -38,6 +38,17 @@ from aegis.utils.provider_errors import (
     handle_openai_error,
 )
 
+# Re-export from cwe_lookup
+from aegis.utils.cwe_lookup import (
+    format_cwe,
+    format_cwe_full,
+    get_cwe_category,
+    get_cwe_info,
+    get_cwe_name,
+    get_cwe_severity,
+    normalize_cwe_id,
+)
+
 __all__ = [
     # helpers
     "allowed_file",
@@ -60,4 +71,12 @@ __all__ = [
     "handle_anthropic_error",
     "handle_google_error",
     "handle_openai_error",
+    # cwe_lookup
+    "format_cwe",
+    "format_cwe_full",
+    "get_cwe_category",
+    "get_cwe_info",
+    "get_cwe_name",
+    "get_cwe_severity",
+    "normalize_cwe_id",
 ]

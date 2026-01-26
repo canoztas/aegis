@@ -99,10 +99,48 @@ class JSONFindingsParser(BaseParser):
             raw_output=raw_output if errors else None,
         )
 
+    def _sanitize_json_string(self, text: str) -> str:
+        r"""
+        Sanitize JSON string by fixing common invalid escape sequences.
+
+        Models sometimes output invalid JSON escapes like \\0 (null char).
+        JSON only supports: \" \\ \/ \b \f \n \r \t \uXXXX
+
+        Also handles actual control characters (null bytes, etc.) that models
+        may include in their output.
+        """
+        # First, handle actual control characters (not escape sequences)
+        # Replace actual null bytes with escaped representation
+        text = text.replace('\x00', '\\u0000')
+
+        # Replace other control characters (0x01-0x1F except \t \n \r)
+        def replace_control_char(match):
+            char = match.group(0)
+            return f'\\u{ord(char):04x}'
+
+        text = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f]', replace_control_char, text)
+
+        # Replace invalid \0 escape with literal backslash-zero
+        text = re.sub(r'(?<!\\)\\0', r'\\\\0', text)
+
+        # Replace other invalid single-char escapes (but preserve valid ones)
+        # Valid: " \ / b f n r t u
+        def fix_invalid_escape(match):
+            char = match.group(1)
+            if char in 'bfnrtu"\\/':
+                return match.group(0)  # Keep valid escapes
+            return '\\\\' + char  # Convert to literal
+
+        text = re.sub(r'\\([^bfnrtu"\\/])', fix_invalid_escape, text)
+
+        return text
+
     def _extract_json(self, text: str) -> Optional[str]:
         """
         Extract JSON from text, handling fenced code blocks and plain JSON.
         """
+        # Sanitize common JSON issues first
+        text = self._sanitize_json_string(text)
         # Prefer fenced JSON blocks first
         json_fence_pattern = r"```json\s*([\s\S]*?)```"
         for match in re.finditer(json_fence_pattern, text, flags=re.IGNORECASE):
