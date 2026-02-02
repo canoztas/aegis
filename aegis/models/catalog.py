@@ -449,6 +449,29 @@ CLOUD_GOOGLE_GEMINI_FLASH = {
     "tags": ["cloud", "google", "triage", "deep_scan", "fast", "catalog"],
 }
 
+CLOUD_GOOGLE_GEMINI_25_FLASH = {
+    "catalog_id": "google_gemini_25_flash",
+    "category": CatalogCategory.CLOUD,
+    "display_name": "Google Gemini 2.5 Flash",
+    "description": "Google Gemini 2.5 Flash - latest generation, fast and capable. Requires API key.",
+    "provider_id": "google",
+    "model_type": "google_cloud",
+    "model_name": "gemini-2.5-flash",
+    "task_type": "text-generation",
+    "roles": ["triage", "deep_scan"],
+    "parser_id": "json_schema",
+    "parser_config": {},
+    "settings": {
+        "max_tokens": 65536,
+        "temperature": 0.1,
+    },
+    "size_mb": 0,
+    "requires_gpu": False,
+    "requires_api_key": True,
+    "requires_artifact": False,
+    "tags": ["cloud", "google", "triage", "deep_scan", "fast", "catalog"],
+}
+
 
 # =============================================================================
 # Classic ML Model Definitions (sklearn, joblib)
@@ -554,6 +577,7 @@ MODEL_CATALOG: List[Dict[str, Any]] = [
     CLOUD_ANTHROPIC_SONNET,
     CLOUD_GOOGLE_GEMINI_PRO,
     CLOUD_GOOGLE_GEMINI_FLASH,
+    CLOUD_GOOGLE_GEMINI_25_FLASH,
     # Ollama Models
     OLLAMA_QWEN25_CODER_7B,
     OLLAMA_CODELLAMA_7B,
@@ -600,6 +624,9 @@ CATALOG_ALIASES: Dict[str, str] = {
     # Qwen 0.5B
     "qwen25_05b": "qwen25_05b",
     "qwen/qwen2.5-0.5b-instruct": "qwen25_05b",
+    # Google Gemini 2.5 Flash
+    "google_gemini_25_flash": "google_gemini_25_flash",
+    "gemini-2.5-flash": "google_gemini_25_flash",
     # Classic ML
     "kaggle_rf_cfunctions": "kaggle_rf_cfunctions",
     "kaggle-rf-cfunctions": "kaggle_rf_cfunctions",

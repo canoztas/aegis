@@ -19,7 +19,7 @@ python-dotenv>=1.0.0
 # Cloud AI Providers
 openai>=1.0.0
 anthropic>=0.18.0
-google-generativeai>=0.3.0
+google-genai>=1.0.0
 
 # PyTorch with CUDA 11.8 support
 --extra-index-url https://download.pytorch.org/whl/cu118

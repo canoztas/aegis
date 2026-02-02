@@ -740,6 +740,7 @@ const CLOUD_MODEL_PRESETS = {
     { value: "custom", label: "Custom Model..." }
   ],
   google_cloud: [
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Latest)" },
     { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
     { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash (Fast)" },
     { value: "gemini-pro", label: "Gemini Pro" },

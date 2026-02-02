@@ -1,4 +1,4 @@
-"""Google Generative AI provider for Gemini models."""
+"""Google Gen AI provider for Gemini models."""
 
 import asyncio
 import logging
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class GoogleProvider(CloudProviderBase):
-    """Provider for Google Generative AI (Gemini Pro, Gemini 1.5)."""
+    """Provider for Google Gemini models via the google-genai SDK."""
 
     provider_name = "Google"
 
@@ -27,7 +27,7 @@ class GoogleProvider(CloudProviderBase):
         Initialize Google provider.
 
         Args:
-            model_name: Gemini model name (gemini-pro, gemini-1.5-pro, etc.)
+            model_name: Gemini model name (gemini-2.5-flash, gemini-1.5-pro, etc.)
             api_key: Google API key (or set GOOGLE_API_KEY env var)
             timeout: Request timeout in seconds
         """
@@ -46,14 +46,13 @@ class GoogleProvider(CloudProviderBase):
             raise ValueError("Google API key required. Set GOOGLE_API_KEY environment variable or pass api_key parameter.")
 
     def _create_client(self) -> None:
-        """Create the Google Generative AI client."""
+        """Create the Google Gen AI client."""
         try:
-            import google.generativeai as genai
-            self.genai = genai
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(self.model_name)
+            from google import genai
+            self._genai = genai
+            self.client = genai.Client(api_key=self.api_key)
         except ImportError:
-            raise ImportError("Google Generative AI package required. Install with: pip install google-generativeai")
+            raise ImportError("Google Gen AI package required. Install with: pip install google-genai")
 
     async def _make_generate_request(
         self,
@@ -65,33 +64,38 @@ class GoogleProvider(CloudProviderBase):
         top_k: int = 40,
         **kwargs,
     ) -> str:
-        """Make the Google Generative AI request."""
-        # Google Generative AI doesn't have separate system prompt
-        # So we prepend it to the user prompt
+        """Make the Google Gen AI request."""
+        from google.genai import types
+
         full_prompt = prompt
         if system_prompt:
             full_prompt = f"{system_prompt}\n\n{prompt}"
 
-        generation_config = self.genai.types.GenerationConfig(
+        # Disable thinking for 2.5+ models to avoid token budget being
+        # consumed by internal reasoning, leaving too few tokens for output.
+        thinking_config = None
+        if "2.5" in self.model_name:
+            thinking_config = types.ThinkingConfig(thinking_budget=0)
+
+        config = types.GenerateContentConfig(
             temperature=temperature,
             max_output_tokens=max_tokens,
             top_p=top_p,
             top_k=top_k,
-            **kwargs,
+            thinking_config=thinking_config,
         )
 
         try:
-            # Run sync method in executor to avoid blocking
             response = await asyncio.to_thread(
-                self.model.generate_content,
-                full_prompt,
-                generation_config=generation_config,
+                self.client.models.generate_content,
+                model=self.model_name,
+                contents=full_prompt,
+                config=config,
             )
 
             content = response.text
 
-            # Log token usage for cost tracking
-            if hasattr(response, "usage_metadata"):
+            if hasattr(response, "usage_metadata") and response.usage_metadata:
                 usage = response.usage_metadata
                 logger.debug(
                     f"Google API call: model={self.model_name}, "
@@ -115,26 +119,31 @@ class GoogleProvider(CloudProviderBase):
         top_k: int = 40,
         **kwargs,
     ) -> Any:
-        """Make the Google Generative AI streaming request."""
+        """Make the Google Gen AI streaming request."""
+        from google.genai import types
+
         full_prompt = prompt
         if system_prompt:
             full_prompt = f"{system_prompt}\n\n{prompt}"
 
-        generation_config = self.genai.types.GenerationConfig(
+        thinking_config = None
+        if "2.5" in self.model_name:
+            thinking_config = types.ThinkingConfig(thinking_budget=0)
+
+        config = types.GenerateContentConfig(
             temperature=temperature,
             max_output_tokens=max_tokens,
             top_p=top_p,
             top_k=top_k,
-            **kwargs,
+            thinking_config=thinking_config,
         )
 
         try:
-            # Run sync streaming in executor
             return await asyncio.to_thread(
-                self.model.generate_content,
-                full_prompt,
-                generation_config=generation_config,
-                stream=True,
+                self.client.models.generate_content_stream,
+                model=self.model_name,
+                contents=full_prompt,
+                config=config,
             )
 
         except Exception as e:
@@ -174,6 +183,13 @@ GOOGLE_PRICING = {
         "output": 0.30,
     },
 
+    # Gemini 2.5 Flash
+    "gemini-2.5-flash": {
+        "input_short": 0.15,   # ≤128K tokens
+        "input_long": 0.30,    # >128K tokens
+        "output": 0.60,
+    },
+
     # Gemini Pro (legacy)
     "gemini-pro": {
         "input_short": 0.50,
@@ -190,7 +206,7 @@ def calculate_cost(
     use_long_context: bool = False
 ) -> float:
     """
-    Calculate cost for Google Generative AI call.
+    Calculate cost for Google Gen AI call.
 
     Args:
         model_name: Google model name

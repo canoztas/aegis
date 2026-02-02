@@ -169,6 +169,15 @@ class JSONFindingsParser(BaseParser):
             except json.JSONDecodeError:
                 continue
 
+        # Handle unclosed fenced blocks (truncated output)
+        unclosed_fence = re.search(r"```(?:json|[a-zA-Z0-9_-]+)?\s*([\s\S]+)", text, flags=re.IGNORECASE)
+        if unclosed_fence:
+            inner = unclosed_fence.group(1).strip().rstrip("`").strip()
+            if inner and inner[0] in "{[":
+                brace_json = self._extract_balanced_braces(inner)
+                if brace_json:
+                    return brace_json
+
         # Try to find first balanced braces
         brace_json = self._extract_balanced_braces(text)
         if brace_json:
