@@ -69,12 +69,12 @@ async function addMLModel() {
   if (document.getElementById("mlRoleDeep")?.checked) roles.push("deep_scan");
 
   if (!modelPath) {
-    alert("Model path is required.");
+    showToast("Validation", "Model path is required.", "warning");
     return;
   }
 
   if (!roles.length) {
-    alert("At least one role is required.");
+    showToast("Validation", "At least one role is required.", "warning");
     return;
   }
 
@@ -113,7 +113,7 @@ async function addMLModel() {
       throw new Error(data.error || `HTTP ${response.status}`);
     }
 
-    alert("ML Model registered successfully!");
+    showToast("Success", "ML model registered successfully.", "success");
 
     // Clear form
     document.getElementById("mlDisplayName").value = "";
@@ -125,7 +125,7 @@ async function addMLModel() {
     loadRegisteredModels();
     loadMLPresets();
   } catch (error) {
-    alert(`Failed to register ML model: ${error.message}`);
+    showToast("Error", `Failed to register ML model: ${error.message}`, "danger");
   }
 }
 
@@ -138,7 +138,7 @@ async function deleteMLModel(modelId) {
     loadRegisteredModels();
     loadMLPresets();  // Refresh presets to show as available again
   } catch (error) {
-    alert(`Delete failed: ${error.message}`);
+    showToast("Error", `Delete failed: ${error.message}`, "danger");
   }
 }
 
@@ -246,13 +246,13 @@ async function installMLPreset(presetId) {
       ? "Model was already cached."
       : "Model downloaded successfully.";
 
-    alert(`ML Model installed!\n${statusMsg}\nStatus: ${data.status}`);
+    showToast("Installed", `ML model installed. ${statusMsg}`, "success");
 
     // Refresh lists
     loadMLPresets();
     loadRegisteredModels();
   } catch (error) {
-    alert(`Installation failed: ${error.message}`);
+    showToast("Error", `Installation failed: ${error.message}`, "danger");
     // Refresh to reset button state
     loadMLPresets();
   }
@@ -432,7 +432,7 @@ function openEditModelModal(modelId) {
   const models = window._registeredModelsCache || [];
   const model = models.find(m => (m.model_id || m.id || m.modelId) === modelId);
   if (!model) {
-    alert("Model not found. Refresh the registry list.");
+    showToast("Error", "Model not found. Refresh the registry list.", "danger");
     return;
   }
 
@@ -486,7 +486,7 @@ function openTestModelModal(modelId) {
   const models = window._registeredModelsCache || [];
   const model = models.find(m => (m.model_id || m.id || m.modelId) === modelId);
   if (!model) {
-    alert("Model not found. Refresh the registry list.");
+    showToast("Error", "Model not found. Refresh the registry list.", "danger");
     return;
   }
 
@@ -507,7 +507,7 @@ async function runTestModel() {
   const resultBox = document.getElementById("testResult");
 
   if (!modelId || !prompt) {
-    alert("Model ID and prompt are required.");
+    showToast("Validation", "Model ID and prompt are required.", "warning");
     return;
   }
 
@@ -557,7 +557,7 @@ async function saveRegisteredModel() {
   if (document.getElementById("roleExplain").checked) roles.push("explain");
 
   if (!roles.length) {
-    alert("At least one role is required.");
+    showToast("Validation", "At least one role is required.", "warning");
     return;
   }
 
@@ -567,7 +567,7 @@ async function saveRegisteredModel() {
     hfKwargs = parseJsonField(document.getElementById("editHfKwargs").value, "HF_KWARGS_JSON");
     ollamaOptions = parseJsonField(document.getElementById("editOllamaOptions").value, "OPTIONS_JSON");
   } catch (e) {
-    alert(e.message);
+    showToast("Validation", e.message, "warning");
     return;
   }
 
@@ -650,7 +650,7 @@ async function saveRegisteredModel() {
     if (modal) modal.hide();
     loadRegisteredModels();
   } catch (e) {
-    alert(`Failed to update model: ${e.message} `);
+    showToast("Error", `Failed to update model: ${e.message}`, "danger");
   }
 }
 
@@ -680,11 +680,11 @@ async function registerOllamaQuick(name) {
       throw new Error(errMsg || `HTTP ${response.status} `);
     }
 
-    alert("Model Registered Successfully");
+    showToast("Success", "Model registered successfully.", "success");
     loadRegisteredModels();
     loadOllamaModels(false);
   } catch (e) {
-    alert("Error: " + e.message);
+    showToast("Error", e.message, "danger");
   }
 }
 
@@ -715,10 +715,10 @@ async function pullOllamaModel() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model_name: name })
     });
-    alert("Download Started. Check server logs or wait for completion.");
+    showToast("Download", "Download started. Check server logs or wait for completion.", "info");
     loadOllamaModels(true);
   } catch (e) {
-    alert("Error: " + e.message);
+    showToast("Error", e.message, "danger");
   }
   bootstrap.Modal.getInstance(document.getElementById("pullOllamaModal")).hide();
 }
@@ -733,10 +733,12 @@ const CLOUD_MODEL_PRESETS = {
     { value: "custom", label: "Custom Model..." }
   ],
   anthropic_cloud: [
+    { value: "claude-opus-4-20250514", label: "Claude Opus 4 (Most Capable)" },
     { value: "claude-sonnet-4-20250514", label: "Claude Sonnet 4 (Latest)" },
+    { value: "claude-3-5-haiku-20241022", label: "Claude 3.5 Haiku (Fast)" },
     { value: "claude-3-5-sonnet-20241022", label: "Claude 3.5 Sonnet" },
-    { value: "claude-3-haiku-20240307", label: "Claude 3 Haiku (Fast)" },
     { value: "claude-3-opus-20240229", label: "Claude 3 Opus" },
+    { value: "claude-3-haiku-20240307", label: "Claude 3 Haiku" },
     { value: "custom", label: "Custom Model..." }
   ],
   google_cloud: [
@@ -818,7 +820,7 @@ async function addCloudModel() {
   if (document.getElementById("cloudRoleExplain")?.checked) roles.push("explain");
 
   if (!modelName) {
-    alert("Please select or enter a model name.");
+    showToast("Validation", "Please select or enter a model name.", "warning");
     return;
   }
 
@@ -861,7 +863,7 @@ async function addCloudModel() {
       } catch (e) { }
       throw new Error(errMsg || "Cloud registration failed");
     }
-    alert("Cloud model registered");
+    showToast("Success", "Cloud model registered.", "success");
     // Reset form
     document.getElementById("cloudModelPreset").value = "";
     document.getElementById("cloudModelName").value = "";
@@ -873,7 +875,7 @@ async function addCloudModel() {
     document.getElementById("cloudCustomRateLimitDiv").classList.add("d-none");
     loadRegisteredModels();
   } catch (e) {
-    alert("Error: " + e.message);
+    showToast("Error", e.message, "danger");
   }
 }
 
@@ -890,7 +892,7 @@ function seedBuiltinModels() {
 // HF Modal Helpers
 async function registerHFPreset(presetId, options = {}) {
   // Mock implementation for demo logic or real call if backend supports
-  alert("Installing " + presetId + "... (This may take a while)");
+  showToast("Download", "Installing " + presetId + ". This may take a while.", "info");
 }
 
 function openHFPresetModal(presetId) {
@@ -903,8 +905,8 @@ function openHFPresetModal(presetId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ preset_id: presetId })
     }).then(r => {
-      if (r.ok) { alert("Install started!"); loadHuggingFaceModels(); loadRegisteredModels(); }
-      else alert("Failed to start install.");
+      if (r.ok) { showToast("Success", "Install started.", "success"); loadHuggingFaceModels(); loadRegisteredModels(); }
+      else showToast("Error", "Failed to start install.", "danger");
     });
   }
 }

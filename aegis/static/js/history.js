@@ -167,11 +167,11 @@ async function deleteScan(scanId) {
         if (res.ok) {
             loadScanHistory(); // Reload list
         } else {
-            alert(`ERROR: ${data.error}`);
+            showToast("Error", data.error, "danger");
         }
     } catch (e) {
         console.error("Delete failed", e);
-        alert("CRITICAL_ERROR: Failed to delete scan.");
+        showToast("Error", "Failed to delete scan.", "danger");
     }
 }
 

@@ -19,6 +19,7 @@ from aegis.providers.hf_local import (
     VULBERTA_DEVIGN,
     UNIXCODER_PRIMEVUL,
     QWEN25_CODER_7B,
+    VULNLLM_R_7B,
     DEEPSEEK_CODER_V2_LITE,
     STARCODER2_15B,
     PHI35_MINI,
@@ -955,6 +956,12 @@ def list_hf_presets() -> Any:
             "recommended_parser": "json_schema",
         },
         {
+            **VULNLLM_R_7B,
+            "preset_id": "vulnllm_r_7b",
+            "recommended_roles": ["deep_scan"],
+            "recommended_parser": "json_schema",
+        },
+        {
             **DEEPSEEK_CODER_V2_LITE,
             "preset_id": "deepseek_coder_v2_lite",
             "recommended_roles": ["deep_scan"],
@@ -1030,6 +1037,10 @@ def register_hf_preset() -> Any:
             "qwen/qwen2.5-coder-7b-instruct": "qwen25_coder_7b",
             "qwen2.5-coder-7b-instruct": "qwen25_coder_7b",
             "qwen2.5-coder-7b": "qwen25_coder_7b",
+            # VulnLLM-R 7B
+            "vulnllm_r_7b": "vulnllm_r_7b",
+            "ucsb-surfi/vulnllm-r-7b": "vulnllm_r_7b",
+            "vulnllm-r-7b": "vulnllm_r_7b",
             # DeepSeek Coder V2 Lite
             "deepseek_coder_v2_lite": "deepseek_coder_v2_lite",
             "deepseek-ai/deepseek-coder-v2-lite-instruct": "deepseek_coder_v2_lite",
@@ -1103,6 +1114,10 @@ def register_hf_preset() -> Any:
             }
         elif preset_id == "qwen25_coder_7b":
             preset = QWEN25_CODER_7B
+            roles = [ModelRole.DEEP_SCAN]
+            parser_id = "json_schema"
+        elif preset_id == "vulnllm_r_7b":
+            preset = VULNLLM_R_7B
             roles = [ModelRole.DEEP_SCAN]
             parser_id = "json_schema"
         elif preset_id == "deepseek_coder_v2_lite":

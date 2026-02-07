@@ -50,6 +50,16 @@ class ScanState:
     results: Dict[str, ScanResult]
     status: Dict[str, str]
     cancel_events: Dict[str, threading.Event]
+    results_ts: Dict[str, float] = None  # Timestamps for cache eviction
+
+    def __post_init__(self):
+        if self.results_ts is None:
+            self.results_ts = {}
+
+    def store_result(self, scan_id: str, result: ScanResult) -> None:
+        """Store a scan result with timestamp for TTL eviction."""
+        self.results[scan_id] = result
+        self.results_ts[scan_id] = time.time()
 
 
 class ScanService:
@@ -148,7 +158,7 @@ class ScanService:
                         source_files=source_files,
                     )
 
-                    self.scan_state.results[scan_id] = scan_result
+                    self.scan_state.store_result(scan_id, scan_result)
                     self.scan_state.status[scan_id] = status
 
                     if self.use_v2:
@@ -395,7 +405,7 @@ class ScanService:
                     finalize_scan("cancelled")
                     return
 
-                self.scan_state.results[scan_id] = scan_result
+                self.scan_state.store_result(scan_id, scan_result)
                 self.scan_state.status[scan_id] = "completed"
                 debug_scan_log(
                     f"[scan-debug] scan completed: {scan_id} findings={len(scan_result.consensus_findings)}"
@@ -657,7 +667,7 @@ class ScanService:
                 scan_result = cascade_result.to_scan_result()
                 scan_result.source_files = source_files
 
-                self.scan_state.results[scan_id] = scan_result
+                self.scan_state.store_result(scan_id, scan_result)
                 self.scan_state.status[scan_id] = "completed"
 
                 if self.use_v2:

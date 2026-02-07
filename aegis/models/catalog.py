@@ -209,6 +209,36 @@ HF_QWEN25_CODER_7B = {
     "tags": ["generative", "deep_scan", "gpu", "catalog"],
 }
 
+HF_VULNLLM_R_7B = {
+    "catalog_id": "vulnllm_r_7b",
+    "category": CatalogCategory.HUGGINGFACE,
+    "display_name": "VulnLLM-R 7B",
+    "description": "Qwen2.5-7B fine-tuned for vulnerability detection with chain-of-thought reasoning. Supports C, C++, Python, Java.",
+    "provider_id": "huggingface",
+    "model_type": "hf_local",
+    "model_name": "UCSB-SURFI/VulnLLM-R-7B",
+    "task_type": "text-generation",
+    "roles": ["deep_scan"],
+    "parser_id": "json_schema",
+    "parser_config": {},
+    "hf_kwargs": {
+        "device_map": "auto",
+        "torch_dtype": "bf16",
+        "trust_remote_code": True,
+    },
+    "generation_kwargs": {
+        "max_new_tokens": 1024,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "do_sample": True,
+    },
+    "size_mb": 16000,
+    "requires_gpu": True,
+    "requires_api_key": False,
+    "requires_artifact": False,
+    "tags": ["generative", "deep_scan", "vulnerability", "cot", "gpu", "catalog"],
+}
+
 HF_DEEPSEEK_CODER_V2_LITE = {
     "catalog_id": "deepseek_coder_v2_lite",
     "category": CatalogCategory.HUGGINGFACE,
@@ -403,6 +433,52 @@ CLOUD_ANTHROPIC_SONNET = {
     "tags": ["cloud", "anthropic", "deep_scan", "judge", "catalog"],
 }
 
+CLOUD_ANTHROPIC_HAIKU_35 = {
+    "catalog_id": "anthropic_claude_haiku_35",
+    "category": CatalogCategory.CLOUD,
+    "display_name": "Claude Haiku 3.5",
+    "description": "Anthropic Claude 3.5 Haiku - fast and cost-effective for triage. Requires API key.",
+    "provider_id": "anthropic",
+    "model_type": "anthropic_cloud",
+    "model_name": "claude-3-5-haiku-20241022",
+    "task_type": "text-generation",
+    "roles": ["triage", "deep_scan"],
+    "parser_id": "json_schema",
+    "parser_config": {},
+    "settings": {
+        "max_tokens": 4096,
+        "temperature": 0.1,
+    },
+    "size_mb": 0,
+    "requires_gpu": False,
+    "requires_api_key": True,
+    "requires_artifact": False,
+    "tags": ["cloud", "anthropic", "triage", "deep_scan", "fast", "catalog"],
+}
+
+CLOUD_ANTHROPIC_OPUS = {
+    "catalog_id": "anthropic_claude_opus",
+    "category": CatalogCategory.CLOUD,
+    "display_name": "Claude Opus 4",
+    "description": "Anthropic Claude Opus 4 - most capable model for deep analysis and judging. Requires API key.",
+    "provider_id": "anthropic",
+    "model_type": "anthropic_cloud",
+    "model_name": "claude-opus-4-20250514",
+    "task_type": "text-generation",
+    "roles": ["deep_scan", "judge"],
+    "parser_id": "json_schema",
+    "parser_config": {},
+    "settings": {
+        "max_tokens": 4096,
+        "temperature": 0.1,
+    },
+    "size_mb": 0,
+    "requires_gpu": False,
+    "requires_api_key": True,
+    "requires_artifact": False,
+    "tags": ["cloud", "anthropic", "deep_scan", "judge", "catalog"],
+}
+
 CLOUD_GOOGLE_GEMINI_PRO = {
     "catalog_id": "google_gemini_pro",
     "category": CatalogCategory.CLOUD,
@@ -567,6 +643,7 @@ MODEL_CATALOG: List[Dict[str, Any]] = [
     # HuggingFace Generative (Deep Scan)
     HF_CODEASTRA_7B,
     HF_QWEN25_CODER_7B,
+    HF_VULNLLM_R_7B,
     HF_DEEPSEEK_CODER_V2_LITE,
     HF_STARCODER2_15B,
     HF_PHI35_MINI,
@@ -575,6 +652,8 @@ MODEL_CATALOG: List[Dict[str, Any]] = [
     CLOUD_OPENAI_GPT4O,
     CLOUD_OPENAI_GPT4O_MINI,
     CLOUD_ANTHROPIC_SONNET,
+    CLOUD_ANTHROPIC_HAIKU_35,
+    CLOUD_ANTHROPIC_OPUS,
     CLOUD_GOOGLE_GEMINI_PRO,
     CLOUD_GOOGLE_GEMINI_FLASH,
     CLOUD_GOOGLE_GEMINI_25_FLASH,
@@ -624,6 +703,18 @@ CATALOG_ALIASES: Dict[str, str] = {
     # Qwen 0.5B
     "qwen25_05b": "qwen25_05b",
     "qwen/qwen2.5-0.5b-instruct": "qwen25_05b",
+    # VulnLLM-R
+    "vulnllm_r_7b": "vulnllm_r_7b",
+    "ucsb-surfi/vulnllm-r-7b": "vulnllm_r_7b",
+    "vulnllm-r-7b": "vulnllm_r_7b",
+    # Anthropic Haiku 3.5
+    "anthropic_claude_haiku_35": "anthropic_claude_haiku_35",
+    "claude-3-5-haiku-20241022": "anthropic_claude_haiku_35",
+    "claude-3.5-haiku": "anthropic_claude_haiku_35",
+    # Anthropic Opus 4
+    "anthropic_claude_opus": "anthropic_claude_opus",
+    "claude-opus-4-20250514": "anthropic_claude_opus",
+    "claude-opus-4": "anthropic_claude_opus",
     # Google Gemini 2.5 Flash
     "google_gemini_25_flash": "google_gemini_25_flash",
     "gemini-2.5-flash": "google_gemini_25_flash",

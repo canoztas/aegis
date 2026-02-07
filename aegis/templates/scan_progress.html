@@ -1250,12 +1250,12 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
         if (response.ok) {
           logMessage('Scan cancellation requested', 'warning');
         } else {
-          alert(`Failed to cancel scan: ${data.error || 'Unknown error'}`);
+          showToast("Error", "Failed to cancel scan: " + (data.error || "Unknown error"), "danger");
           btn.disabled = false;
           btn.innerHTML = '<i class="bi bi-x-circle"></i> Cancel Scan';
         }
       } catch (error) {
-        alert(`Error cancelling scan: ${error.message}`);
+        showToast("Error", "Failed to cancel scan: " + error.message, "danger");
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-x-circle"></i> Cancel Scan';
       }

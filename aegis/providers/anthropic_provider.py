@@ -139,25 +139,21 @@ class AnthropicProvider(CloudProviderBase):
                 yield text
 
 
-# Model pricing (USD per 1M tokens) - Updated 2025-01
+# Model pricing (USD per 1M tokens) - Updated 2025-05
 ANTHROPIC_PRICING = {
-    # Claude 3.5 Sonnet
+    # Claude 4 family
+    "claude-opus-4-20250514": {"input": 15.0, "output": 75.0},
+    "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0},
+
+    # Claude 3.5 family
     "claude-3-5-sonnet-20241022": {"input": 3.0, "output": 15.0},
     "claude-3-5-sonnet-20240620": {"input": 3.0, "output": 15.0},
+    "claude-3-5-haiku-20241022": {"input": 0.80, "output": 4.0},
 
-    # Claude 3 Opus
+    # Claude 3 family
     "claude-3-opus-20240229": {"input": 15.0, "output": 75.0},
-
-    # Claude 3 Sonnet
     "claude-3-sonnet-20240229": {"input": 3.0, "output": 15.0},
-
-    # Claude 3 Haiku
     "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
-
-    # Legacy models
-    "claude-2.1": {"input": 8.0, "output": 24.0},
-    "claude-2.0": {"input": 8.0, "output": 24.0},
-    "claude-instant-1.2": {"input": 0.8, "output": 2.4},
 }
 
 

@@ -1,6 +1,7 @@
 """Routes for Aegis application."""
 import os
 import json
+import time
 import uuid
 import threading
 from typing import Any, Dict, List
@@ -30,8 +31,13 @@ main_bp = Blueprint("main", __name__)
 
 # Global scan storage
 _scan_results: Dict[str, ScanResult] = {}
+_scan_results_ts: Dict[str, float] = {}  # Timestamps for cache eviction
 _scan_status: Dict[str, str] = {}  # Track scan status: pending, running, completed, failed, cancelled
 _scan_cancel_events: Dict[str, threading.Event] = {}  # Cancel events for running scans
+
+# Cache eviction settings
+_SCAN_CACHE_TTL = 3600  # 1 hour
+_SCAN_CACHE_MAX_SIZE = 100
 
 # V2 database repositories (lazy loaded)
 _use_v2 = os.environ.get("AEGIS_USE_V2", "true").lower() == "true"
@@ -52,6 +58,7 @@ _scan_state = ScanState(
     results=_scan_results,
     status=_scan_status,
     cancel_events=_scan_cancel_events,
+    results_ts=_scan_results_ts,
 )
 _scan_service = ScanService(
     scan_state=_scan_state,
@@ -59,6 +66,36 @@ _scan_service = ScanService(
     get_v2_repositories=get_v2_repositories,
 )
 _scan_worker = None
+
+
+def _cleanup_scan_cache() -> int:
+    """Evict expired entries from the in-memory scan results cache.
+
+    Returns the number of evicted entries.
+    """
+    now = time.time()
+    evicted = 0
+
+    # Evict entries older than TTL
+    expired_ids = [
+        sid for sid, ts in _scan_results_ts.items()
+        if now - ts > _SCAN_CACHE_TTL
+    ]
+    for sid in expired_ids:
+        _scan_results.pop(sid, None)
+        _scan_results_ts.pop(sid, None)
+        evicted += 1
+
+    # If still over max size, evict oldest entries
+    if len(_scan_results) > _SCAN_CACHE_MAX_SIZE:
+        sorted_ids = sorted(_scan_results_ts, key=_scan_results_ts.get)
+        excess = len(_scan_results) - _SCAN_CACHE_MAX_SIZE
+        for sid in sorted_ids[:excess]:
+            _scan_results.pop(sid, None)
+            _scan_results_ts.pop(sid, None)
+            evicted += 1
+
+    return evicted
 
 
 def init_scan_worker(app) -> None:
@@ -534,12 +571,10 @@ def delete_scan(scan_id: str) -> Any:
         return jsonify({"error": "Cannot delete a running scan. Cancel it first."}), 400
 
     # Remove from in-memory storage
-    if scan_id in _scan_results:
-        del _scan_results[scan_id]
-    if scan_id in _scan_status:
-        del _scan_status[scan_id]
-    if scan_id in _scan_cancel_events:
-        del _scan_cancel_events[scan_id]
+    _scan_results.pop(scan_id, None)
+    _scan_results_ts.pop(scan_id, None)
+    _scan_status.pop(scan_id, None)
+    _scan_cancel_events.pop(scan_id, None)
 
     # Remove from database if V2
     deleted_from_db = False
@@ -585,6 +620,7 @@ def clear_all_scans() -> Any:
 
     # Clear in-memory storage
     _scan_results.clear()
+    _scan_results_ts.clear()
     _scan_status.clear()
     _scan_cancel_events.clear()
     deleted_count = len(scan_ids)
@@ -663,6 +699,7 @@ def get_scan(scan_id: str) -> Any:
 
                 # Cache it for future requests
                 _scan_results[scan_id] = scan_result
+                _scan_results_ts[scan_id] = time.time()
 
                 return jsonify(scan_result.to_dict())
         except Exception as e:
@@ -834,6 +871,7 @@ def get_scan_csv(scan_id: str) -> Any:
 @main_bp.route("/api/scans", methods=["GET"])
 def list_scans() -> Any:
     """List recent scans."""
+    _cleanup_scan_cache()
     limit = request.args.get("limit", 50, type=int)
 
     scans = []

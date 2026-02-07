@@ -379,11 +379,11 @@ async function unloadModel(modelId) {
       loadRuntimeStatus();
     } else {
       console.error('Unload failed:', data.error);
-      alert(`UNLOAD_ERROR: ${data.error}`);
+      showToast("Error", "Failed to unload model: " + data.error, "danger");
     }
   } catch (error) {
     console.error('Unload error:', error);
-    alert(`UNLOAD_ERROR: ${error.message}`);
+    showToast("Error", "Failed to unload model: " + error.message, "danger");
   }
 }
 
@@ -404,11 +404,11 @@ async function clearAllModels() {
       loadRuntimeStatus();
     } else {
       console.error('Clear failed:', data.error);
-      alert(`CLEAR_ERROR: ${data.error}`);
+      showToast("Error", "Failed to clear models: " + data.error, "danger");
     }
   } catch (error) {
     console.error('Clear error:', error);
-    alert(`CLEAR_ERROR: ${error.message}`);
+    showToast("Error", "Failed to clear models: " + error.message, "danger");
   }
 }
 

@@ -507,17 +507,22 @@ class HFLocalProvider:
             # Ensure trust_remote_code is set for custom architectures
             safe_kwargs["trust_remote_code"] = True
 
-            # Normalize torch dtype if configured
-            torch_dtype = safe_kwargs.get("torch_dtype")
+            # Normalize torch dtype if configured (use 'dtype' for newer transformers)
+            torch_dtype = safe_kwargs.pop("torch_dtype", None)
             if torch_dtype and _torch is not None:
+                resolved = None
                 if isinstance(torch_dtype, str):
                     dtype_key = torch_dtype.lower()
                     if dtype_key in ("bf16", "bfloat16"):
-                        safe_kwargs["torch_dtype"] = _torch.bfloat16
+                        resolved = _torch.bfloat16
                     elif dtype_key in ("fp16", "float16"):
-                        safe_kwargs["torch_dtype"] = _torch.float16
+                        resolved = _torch.float16
                     elif dtype_key in ("fp32", "float32"):
-                        safe_kwargs["torch_dtype"] = _torch.float32
+                        resolved = _torch.float32
+                else:
+                    resolved = torch_dtype
+                if resolved is not None:
+                    safe_kwargs["dtype"] = resolved
 
             # Load tokenizer - try custom model first, fall back to base tokenizer
             tokenizer_id = safe_kwargs.pop("tokenizer_id", None)
@@ -760,17 +765,22 @@ class HFLocalProvider:
             try:
                 safe_kwargs = dict(self.kwargs) if self.kwargs else {}
 
-                # Normalize torch dtype if configured
-                torch_dtype = safe_kwargs.get("torch_dtype")
+                # Normalize torch dtype if configured (use 'dtype' for newer transformers)
+                torch_dtype = safe_kwargs.pop("torch_dtype", None)
                 if torch_dtype and _torch is not None:
+                    resolved = None
                     if isinstance(torch_dtype, str):
                         dtype_key = torch_dtype.lower()
                         if dtype_key in ("bf16", "bfloat16"):
-                            safe_kwargs["torch_dtype"] = _torch.bfloat16
+                            resolved = _torch.bfloat16
                         elif dtype_key in ("fp16", "float16"):
-                            safe_kwargs["torch_dtype"] = _torch.float16
+                            resolved = _torch.float16
                         elif dtype_key in ("fp32", "float32"):
-                            safe_kwargs["torch_dtype"] = _torch.float32
+                            resolved = _torch.float32
+                    else:
+                        resolved = torch_dtype
+                    if resolved is not None:
+                        safe_kwargs["dtype"] = resolved
 
                 if (
                     isinstance(self.device, str)
@@ -1302,8 +1312,8 @@ class HFLocalProvider:
                 elif self.kwargs.get("quantization_config"):
                     telemetry["quantization"] = "quantized"
 
-                # Detect precision from torch_dtype
-                torch_dtype = self.kwargs.get("torch_dtype")
+                # Detect precision from torch_dtype / dtype
+                torch_dtype = self.kwargs.get("torch_dtype") or self.kwargs.get("dtype")
                 if torch_dtype:
                     if _torch:
                         if torch_dtype == _torch.bfloat16:
@@ -1523,6 +1533,24 @@ QWEN25_CODER_7B = {
     "task_type": "text-generation",
     "name": "Qwen 2.5 Coder 7B Instruct",
     "description": "Qwen 2.5 code-specialized 7B model for code analysis and vulnerability detection",
+    "hf_kwargs": {
+        "device_map": "auto",
+        "torch_dtype": "bf16",
+        "trust_remote_code": True,
+    },
+    "generation_kwargs": {
+        "max_new_tokens": 1024,
+        "temperature": 0.2,
+        "top_p": 0.9,
+        "do_sample": True,
+    },
+}
+
+VULNLLM_R_7B = {
+    "model_id": "UCSB-SURFI/VulnLLM-R-7B",
+    "task_type": "text-generation",
+    "name": "VulnLLM-R 7B",
+    "description": "Qwen2.5-7B fine-tuned for vulnerability detection with chain-of-thought reasoning. Supports C, C++, Python, Java.",
     "hf_kwargs": {
         "device_map": "auto",
         "torch_dtype": "bf16",

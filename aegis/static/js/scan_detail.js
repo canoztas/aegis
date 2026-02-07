@@ -633,6 +633,6 @@ async function exportJSON() {
     a.click();
     URL.revokeObjectURL(url);
   } catch (error) {
-    alert("Error exporting JSON: " + error.message);
+    showToast("Error", "Failed to export JSON: " + error.message, "danger");
   }
 }

@@ -149,7 +149,7 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
   const fileInput = document.getElementById("fileInput");
 
   if (!fileInput.files[0] && document.getElementById('fileName').textContent !== 'demo_project_source.zip') {
-    alert("TARGET_MISSING: Please upload a source file.");
+    showToast("Validation", "Please upload a source file.", "warning");
     return;
   }
 
@@ -176,11 +176,11 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
     console.log("[cascade-debug] Pass 2 selected:", pass2Models);
 
     if (pass1Models.length === 0) {
-      alert("CASCADE_ERROR: Please select at least one Pass 1 model.");
+      showToast("Validation", "Please select at least one Pass 1 model.", "warning");
       return;
     }
     if (pass2Models.length === 0) {
-      alert("CASCADE_ERROR: Please select at least one Pass 2 model.");
+      showToast("Validation", "Please select at least one Pass 2 model.", "warning");
       return;
     }
 
@@ -198,12 +198,12 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
     const judgeModelId = document.getElementById("judgeModelId")?.value;
 
     if (selectedModels.length === 0) {
-      alert("SELECT_NEURAL_NET: Please activate at least one model.");
+      showToast("Validation", "Please select at least one model.", "warning");
       return;
     }
 
     if (consensusStrategy === "judge" && !judgeModelId) {
-      alert("ARBITER_REQUIRED: Please select a judge model.");
+      showToast("Validation", "Please select a judge model.", "warning");
       return;
     }
 
@@ -228,14 +228,13 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
     const data = await response.json();
 
     if (data.error) {
-      let errorMsg = "SYSTEM_ERROR: " + data.error;
+      let errorMsg = data.error;
       // Show debug info for cascade model errors
       if (data.received && data.available) {
-        errorMsg += "\n\nReceived model IDs: " + JSON.stringify(data.received);
-        errorMsg += "\nAvailable model IDs: " + JSON.stringify(data.available);
+        errorMsg += " (Received: " + JSON.stringify(data.received) + ", Available: " + JSON.stringify(data.available) + ")";
         console.error("Cascade model validation failed:", data);
       }
-      alert(errorMsg);
+      showToast("Error", errorMsg, "danger");
       if (progressShim) progressShim.classList.add("d-none");
       if (scanBtn) scanBtn.disabled = false;
     } else {
@@ -250,7 +249,7 @@ document.getElementById("scanForm")?.addEventListener("submit", async function (
       window.location.href = `/scan/${data.scan_id}/progress`;
     }
   } catch (error) {
-    alert("CONNECTION_FAILURE: " + error.message);
+    showToast("Error", error.message, "danger");
     if (progressShim) progressShim.classList.add("d-none");
     if (scanBtn) scanBtn.disabled = false;
   }
