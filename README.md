@@ -15,7 +15,7 @@
 
 <h3>Aegis -of the vulnerable-</h3>
   
-[![Aegis](https://img.shields.io/badge/aegis-Version_1.1-FFD700)](https://github.com/canoztas/aegis)
+[![Aegis](https://img.shields.io/badge/aegis-Version_1.2-FFD700)](https://github.com/canoztas/aegis)
 
 [![Blackhat Arsenal Asia 2026](https://img.shields.io/badge/Black%20Hat%20Arsenal-Asia%202026-blue.svg)](https://blackhat.com/asia-26/arsenal/schedule/index.html#aegis-llm-sast-framework-for-blacklight-code-hunts-50234)
 
@@ -38,7 +38,7 @@ Aegis is an open-source SAST framework for multi-model orchestration, bridging g
 Every model is a pluggable component within a unified registry, enabling complex workflows such as consensus-based decision making, multi-layered scanning, and cross-architecture validation.
 
 **Key Features:**
-- **Multi-Provider Support**: Ollama, HuggingFace, OpenAI, Anthropic, Google, sklearn
+- **Multi-Provider Support**: Ollama, HuggingFace, OpenAI, Anthropic, Google, Claude Code, sklearn
 - **Consensus Strategies**: Union, Majority, Judge, Cascade (coming soon), Weighted (coming soon)
 - **Model Catalog**: Pre-configured models with one-click installation
 - **Real-time Progress**: SSE streaming for live scan updates
@@ -184,6 +184,15 @@ Pre-configured models available in the UI catalog:
 | **CodeLlama 7B** | Deep Scan |
 | **Mistral 7B** | Deep Scan |
 | **DeepSeek Coder 6.7B** | Deep Scan |
+
+### Agentic Models
+
+Aegis v1.2 introduces agentic security scanning, a new provider category that invokes AI coding agents as subprocesses for deep SAST analysis. Agentic models pipe code with a JSON schema constraint and a security-focused system prompt, producing structured findings that enter the consensus engine like any other model.
+
+| Model | Variant | Role |
+|-------|---------|------|
+| **Claude Code Security (Quick)** | Sonnet | Triage, Deep Scan |
+| **Claude Code Security (Deep)** | Opus | Deep Scan, Judge |
 
 ### Classic ML Models
 

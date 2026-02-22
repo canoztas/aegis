@@ -572,6 +572,9 @@
 
       // Show cancel button when scan is running
       document.getElementById('cancelScanBtn').style.display = 'inline-block';
+
+      // Spin navbar icon during scan
+      document.getElementById('navbarIcon')?.classList.add('scanning');
     }
 
     function handleStepStart(e) {
@@ -899,6 +902,9 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
       // Hide cancel button
       document.getElementById('cancelScanBtn').style.display = 'none';
 
+      // Stop navbar icon animation
+      document.getElementById('navbarIcon')?.classList.remove('scanning');
+
       // Close SSE connection
       if (eventSource) {
         eventSource.close();
@@ -925,6 +931,9 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
       // Hide cancel button
       document.getElementById('cancelScanBtn').style.display = 'none';
 
+      // Stop navbar icon animation
+      document.getElementById('navbarIcon')?.classList.remove('scanning');
+
       // Close SSE connection
       if (eventSource) {
         eventSource.close();
@@ -944,6 +953,9 @@ ${tokensPerSec.toFixed(1)} tok/s)`, 'success');
 
       // Hide cancel button
       document.getElementById('cancelScanBtn').style.display = 'none';
+
+      // Stop navbar icon animation
+      document.getElementById('navbarIcon')?.classList.remove('scanning');
 
       // Close SSE connection
       if (eventSource) {

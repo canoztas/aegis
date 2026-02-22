@@ -34,6 +34,7 @@ from aegis.models.catalog import (
     get_catalog_entry,
     get_hf_catalog_entries,
     get_ml_catalog_entries,
+    get_agentic_catalog_entries,
 )
 
 logger = logging.getLogger(__name__)
@@ -150,6 +151,13 @@ def is_model_ready(catalog_entry: dict, registry: ModelRegistryV2) -> CatalogSta
             logger.debug(f"ML model cache check failed for {catalog_id}: {e}")
         return CatalogStatus.ADDED
 
+    elif category == CatalogCategory.AGENTIC:
+        # Agentic models are ready if the CLI tool is available
+        from aegis.providers.claude_code_security import ClaudeCodeSecurityProvider
+        if ClaudeCodeSecurityProvider.is_available():
+            return CatalogStatus.READY
+        return CatalogStatus.ADDED
+
     return CatalogStatus.ADDED
 
 
@@ -258,6 +266,10 @@ def register_catalog_entry(catalog_id: str) -> Any:
                 model_type = ModelType.GOOGLE
             else:
                 model_type = ModelType.CLOUD
+        elif category == CatalogCategory.AGENTIC:
+            provider_id = entry.get("provider_id", "claude_code_security")
+            model_id = f"{provider_id}:{catalog_id}"
+            model_type = ModelType.CLAUDE_CODE
         else:
             model_id = f"{entry.get('provider_id', 'unknown')}:{catalog_id}"
             model_type = ModelType.CLASSIC_ML
@@ -290,6 +302,11 @@ def register_catalog_entry(catalog_id: str) -> Any:
         if category == CatalogCategory.CLASSIC_ML:
             if entry.get("tool_id"):
                 base_settings["tool_id"] = entry["tool_id"]
+            if entry.get("settings"):
+                base_settings.update(entry["settings"])
+
+        # Add Agentic-specific settings (Claude Code Security, etc.)
+        if category == CatalogCategory.AGENTIC:
             if entry.get("settings"):
                 base_settings.update(entry["settings"])
 
@@ -1324,6 +1341,116 @@ def register_ml_preset() -> Any:
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"ML preset registration failed: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@models_bp.route("/agentic/presets", methods=["GET"])
+def list_agentic_presets() -> Any:
+    """
+    List agentic model presets (Claude Code Security, etc.).
+
+    Returns:
+        {
+          "presets": [
+            {
+              "preset_id": "claude_code_security_deep",
+              "name": "Claude Code Security (Deep)",
+              "description": "...",
+              "recommended_roles": ["deep_scan", "judge"],
+              "cli_available": true
+            }
+          ]
+        }
+    """
+    from aegis.providers.claude_code_security import ClaudeCodeSecurityProvider
+
+    agentic_entries = get_agentic_catalog_entries()
+    cli_available = ClaudeCodeSecurityProvider.is_available()
+    presets = []
+
+    for entry in agentic_entries:
+        presets.append({
+            "preset_id": entry.get("catalog_id"),
+            "name": entry.get("display_name"),
+            "description": entry.get("description"),
+            "recommended_roles": entry.get("roles", ["deep_scan"]),
+            "size_mb": entry.get("size_mb", 0),
+            "requires_gpu": entry.get("requires_gpu", False),
+            "cli_available": cli_available,
+            "settings": entry.get("settings", {}),
+        })
+
+    return jsonify({"presets": presets, "cli_available": cli_available})
+
+
+@models_bp.route("/agentic/register_preset", methods=["POST"])
+def register_agentic_preset() -> Any:
+    """
+    Register an agentic model preset.
+
+    Request Body:
+        {
+          "preset_id": "claude_code_security_deep",
+          "display_name": "Custom Name (optional)",
+          "settings": {}  // Override settings (optional)
+        }
+
+    Returns:
+        {"model": <ModelRecord>, "status": "ready"|"added"}
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        preset_id = data.get("preset_id")
+
+        if not preset_id:
+            return jsonify({"error": "preset_id is required"}), 400
+
+        entry = get_catalog_entry(preset_id)
+        if not entry:
+            return jsonify({"error": f"Unknown preset: {preset_id}"}), 404
+
+        category = entry.get("category")
+        if category != CatalogCategory.AGENTIC:
+            return jsonify({"error": f"Preset {preset_id} is not an agentic model"}), 400
+
+        provider_id = entry.get("provider_id", "claude_code_security")
+        model_id = f"{provider_id}:{preset_id}"
+
+        role_strings = entry.get("roles", ["deep_scan"])
+        roles = parse_roles(role_strings)
+
+        settings = {"task_type": entry.get("task_type")}
+        if entry.get("settings"):
+            settings.update(entry["settings"])
+        if data.get("settings"):
+            settings.update(data["settings"])
+
+        registry = ModelRegistryV2()
+        display_name = data.get("display_name", entry.get("display_name"))
+
+        model = registry.register_model(
+            model_id=model_id,
+            model_type=ModelType.CLAUDE_CODE,
+            provider_id=provider_id,
+            model_name=entry.get("model_name", preset_id),
+            display_name=display_name,
+            roles=roles,
+            parser_id=entry.get("parser_id", "claude_code_security"),
+            settings=settings,
+            parser_config=entry.get("parser_config"),
+        )
+
+        status = is_model_ready(entry, registry)
+
+        return jsonify({
+            "model": model.model_dump(),
+            "status": status.value if isinstance(status, CatalogStatus) else status,
+        })
+
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Agentic preset registration failed: {e}")
         return jsonify({"error": str(e)}), 500
 
 

@@ -15,6 +15,7 @@ class ModelType(str, Enum):
     ANTHROPIC_CLOUD = "anthropic_cloud"  # Anthropic API (Claude 3)
     GOOGLE_CLOUD = "google_cloud"  # Google Generative AI (Gemini)
     TOOL_ML = "tool_ml"  # Classic/legacy ML tools (SySeVR, etc.)
+    CLAUDE_CODE = "claude_code"  # Claude Code CLI subprocess-based scanning
 
 
 class ModelRole(str, Enum):

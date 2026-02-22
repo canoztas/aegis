@@ -232,6 +232,23 @@ def create_provider(model: ModelRecord) -> Any:
         except Exception as exc:
             raise ProviderCreationError(str(exc))
 
+    if model.model_type == ModelType.CLAUDE_CODE:
+        from aegis.providers.claude_code_security import ClaudeCodeSecurityProvider
+
+        try:
+            return ClaudeCodeSecurityProvider(
+                model_name=settings.get("claude_model", model.model_name or "opus"),
+                cli_path=settings.get("claude_cli_path"),
+                max_turns=settings.get("max_turns", 1),
+                timeout=settings.get("timeout", 300),
+                skip_permissions=settings.get("skip_permissions", True),
+                tools=settings.get("tools"),
+                extra_cli_args=settings.get("extra_cli_args"),
+                custom_prompt=settings.get("custom_prompt"),
+            )
+        except Exception as exc:
+            raise ProviderCreationError(str(exc))
+
     # Cloud providers (OpenAI, Anthropic, Google)
     if model.model_type == ModelType.OPENAI_CLOUD:
         from aegis.providers.openai_provider import OpenAIProvider

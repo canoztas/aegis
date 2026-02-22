@@ -49,6 +49,12 @@
             ML_MODELS
           </button>
         </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link py-3 px-4 font-monospace small text-uppercase" id="add-agentic-tab" data-bs-toggle="tab"
+            data-bs-target="#add-agentic" type="button" role="tab" aria-controls="add-agentic" aria-selected="false">
+            AGENTIC
+          </button>
+        </li>
       </ul>
     </div>
 
@@ -276,6 +282,39 @@
                   onclick="loadMLPresets()">REFRESH</button>
               </div>
               <div id="mlPresetsList" class="list-group list-group-flush">
+                <div class="d-flex flex-column align-items-center justify-content-center py-4">
+                  <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
+                  <div class="font-monospace text-muted extra-small">LOADING_PRESETS...</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Agentic Models (Claude Code Security, etc.) -->
+        <div class="tab-pane fade" id="add-agentic" role="tabpanel" aria-labelledby="add-agentic-tab">
+          <div class="p-4">
+            <!-- CLI Status Banner -->
+            <div id="agenticCliBanner" class="mb-4" style="display: none;">
+              <div class="alert alert-warning rounded-0 border-0 font-monospace small d-flex align-items-center gap-2 mb-0">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>Claude Code CLI not found. Install with: <code>npm install -g @anthropic-ai/claude-code</code></span>
+              </div>
+            </div>
+
+            <!-- Agentic Presets -->
+            <div class="mb-4">
+              <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="font-monospace text-light mb-0"><i class="bi bi-robot me-2 text-info"></i>AGENTIC_SCANNERS</h6>
+                <button type="button" class="btn btn-outline-secondary btn-sm rounded-0 font-monospace"
+                  onclick="loadAgenticPresets()">REFRESH</button>
+              </div>
+              <p class="text-secondary small mb-3">
+                Agentic models invoke the Claude Code CLI as a subprocess for deep, tool-augmented security scanning.
+                They can read files, search code, and perform multi-step analysis autonomously.
+              </p>
+              <div id="agenticPresetsList" class="list-group list-group-flush">
                 <div class="d-flex flex-column align-items-center justify-content-center py-4">
                   <div class="spinner-border spinner-border-sm text-primary mb-2" role="status"></div>
                   <div class="font-monospace text-muted extra-small">LOADING_PRESETS...</div>

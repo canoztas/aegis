@@ -16,6 +16,7 @@ class CatalogCategory(str, Enum):
     OLLAMA = "ollama"
     CLOUD = "cloud"
     CLASSIC_ML = "classic_ml"
+    AGENTIC = "agentic"
 
 
 class CatalogStatus(str, Enum):
@@ -631,6 +632,61 @@ OLLAMA_CODELLAMA_7B = {
 
 
 # =============================================================================
+# Agentic Model Definitions (Claude Code CLI-based scanning)
+# =============================================================================
+
+AGENTIC_CLAUDE_CODE_SECURITY_QUICK = {
+    "catalog_id": "claude_code_security_quick",
+    "category": CatalogCategory.AGENTIC,
+    "display_name": "Claude Code Security (Quick)",
+    "description": "Fast AI-powered vulnerability scan using Claude Code CLI with Sonnet model. Lower latency, good for triage.",
+    "provider_id": "claude_code_security",
+    "model_type": "claude_code",
+    "model_name": "sonnet",
+    "task_type": "text-generation",
+    "roles": ["triage", "deep_scan"],
+    "parser_id": "claude_code_security",
+    "parser_config": {},
+    "settings": {
+        "claude_model": "sonnet",
+        "max_turns": 1,
+        "timeout": 300,
+        "skip_permissions": True,
+    },
+    "size_mb": 0,
+    "requires_gpu": False,
+    "requires_api_key": False,
+    "requires_artifact": False,
+    "tags": ["agentic", "claude-code", "triage", "deep_scan", "fast", "catalog"],
+}
+
+AGENTIC_CLAUDE_CODE_SECURITY_DEEP = {
+    "catalog_id": "claude_code_security_deep",
+    "category": CatalogCategory.AGENTIC,
+    "display_name": "Claude Code Security (Deep)",
+    "description": "Thorough AI-powered vulnerability scan using Claude Code CLI with Opus model. More turns, deeper analysis.",
+    "provider_id": "claude_code_security",
+    "model_type": "claude_code",
+    "model_name": "opus",
+    "task_type": "text-generation",
+    "roles": ["deep_scan", "judge"],
+    "parser_id": "claude_code_security",
+    "parser_config": {},
+    "settings": {
+        "claude_model": "opus",
+        "max_turns": 1,
+        "timeout": 300,
+        "skip_permissions": True,
+    },
+    "size_mb": 0,
+    "requires_gpu": False,
+    "requires_api_key": False,
+    "requires_artifact": False,
+    "tags": ["agentic", "claude-code", "deep_scan", "judge", "thorough", "catalog"],
+}
+
+
+# =============================================================================
 # Master Catalog List
 # =============================================================================
 
@@ -662,6 +718,9 @@ MODEL_CATALOG: List[Dict[str, Any]] = [
     OLLAMA_CODELLAMA_7B,
     # Classic ML Models
     ML_KAGGLE_RF_CFUNCTIONS,
+    # Agentic Models
+    AGENTIC_CLAUDE_CODE_SECURITY_QUICK,
+    AGENTIC_CLAUDE_CODE_SECURITY_DEEP,
 ]
 
 # Index by catalog_id for fast lookup
@@ -722,6 +781,12 @@ CATALOG_ALIASES: Dict[str, str] = {
     "kaggle_rf_cfunctions": "kaggle_rf_cfunctions",
     "kaggle-rf-cfunctions": "kaggle_rf_cfunctions",
     "rf_cfunctions": "kaggle_rf_cfunctions",
+    # Claude Code Security
+    "claude_code_security_quick": "claude_code_security_quick",
+    "claude-code-security-quick": "claude_code_security_quick",
+    "claude_code_security_deep": "claude_code_security_deep",
+    "claude-code-security-deep": "claude_code_security_deep",
+    "claude_code_security": "claude_code_security_deep",
 }
 
 
@@ -760,3 +825,8 @@ def get_hf_catalog_entries() -> List[Dict[str, Any]]:
 def get_ml_catalog_entries() -> List[Dict[str, Any]]:
     """Get Classic ML catalog entries."""
     return get_catalog_by_category(CatalogCategory.CLASSIC_ML)
+
+
+def get_agentic_catalog_entries() -> List[Dict[str, Any]]:
+    """Get Agentic catalog entries (Claude Code Security, etc.)."""
+    return get_catalog_by_category(CatalogCategory.AGENTIC)

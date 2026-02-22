@@ -265,3 +265,81 @@ body {
 .form-control:focus::placeholder {
   opacity: 0.4;
 }
+
+/* ===================================
+   AEGIS ICON — Dynamic Colors & Scan Animation
+   =================================== */
+
+/* Base: invert black PNG to white, tint with brand teal */
+.aegis-icon {
+  filter: invert(1) sepia(1) saturate(3) hue-rotate(140deg) brightness(0.9)
+          drop-shadow(0 0 6px rgba(44, 140, 127, 0.5));
+  transition: filter 0.4s ease, transform 0.3s ease;
+}
+
+/* Per-tab color profiles via data-page on <body> */
+body[data-page="scan"] .aegis-icon {
+  filter: invert(1) sepia(1) saturate(3) hue-rotate(140deg) brightness(0.9)
+          drop-shadow(0 0 6px rgba(44, 140, 127, 0.5));
+}
+
+body[data-page="models"] .aegis-icon {
+  filter: invert(1) sepia(1) saturate(3) hue-rotate(210deg) brightness(1.1)
+          drop-shadow(0 0 6px rgba(88, 166, 255, 0.5));
+}
+
+body[data-page="gpu"] .aegis-icon {
+  filter: invert(1) sepia(1) saturate(3) hue-rotate(30deg) brightness(1.1)
+          drop-shadow(0 0 6px rgba(255, 215, 0, 0.5));
+}
+
+body[data-page="history"] .aegis-icon {
+  filter: invert(1) sepia(1) saturate(3) hue-rotate(260deg) brightness(1.0)
+          drop-shadow(0 0 6px rgba(160, 120, 255, 0.5));
+}
+
+body[data-page="report"] .aegis-icon {
+  filter: invert(1) sepia(1) saturate(5) hue-rotate(-10deg) brightness(1.1)
+          drop-shadow(0 0 8px rgba(194, 60, 42, 0.6));
+}
+
+/* Upload area: square shape */
+.upload-area {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Upload area hover: spin the icon */
+#uploadIcon:hover {
+  animation: aegis-spin 1.5s linear infinite;
+}
+
+/* File uploaded: icon turns green to confirm target locked */
+.aegis-icon.file-loaded {
+  filter: invert(1) sepia(1) saturate(4) hue-rotate(85deg) brightness(1.1)
+          drop-shadow(0 0 8px rgba(63, 185, 80, 0.6));
+  transform: scale(1.05);
+}
+
+/* Scan animation: spin + red/orange glow cycle */
+.aegis-icon.scanning {
+  animation: aegis-spin 1.5s linear infinite, aegis-scan-glow 2s ease-in-out infinite;
+}
+
+@keyframes aegis-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes aegis-scan-glow {
+  0%, 100% {
+    filter: invert(1) sepia(1) saturate(5) hue-rotate(-10deg) brightness(1.2)
+            drop-shadow(0 0 10px rgba(220, 50, 30, 0.7));
+  }
+  50% {
+    filter: invert(1) sepia(1) saturate(5) hue-rotate(20deg) brightness(1.3)
+            drop-shadow(0 0 14px rgba(255, 165, 0, 0.8));
+  }
+}

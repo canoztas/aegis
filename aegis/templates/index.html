@@ -22,9 +22,9 @@
             <div class="position-relative z-1">
               <div class="mb-3">
                 <!-- Aegis Icon -->
-                <img src="{{ url_for('static', filename='img/aegis-icon.svg') }}" width="80" height="80"
-                  class="group-hover-glow transition-all mb-2"
-                  style="filter: drop-shadow(0 0 5px rgba(44,140,127,0.2)); opacity: 0.8;">
+                <img id="uploadIcon" src="{{ url_for('static', filename='img/aegis-icon.svg') }}" width="96" height="96"
+                  class="aegis-icon group-hover-glow transition-all mb-2"
+                  style="opacity: 0.8;">
               </div>
               <h4 class="fw-bold text-light mb-1">DROP_SOURCE_CODE</h4>
               <p class="text-secondary small font-monospace mb-4">ACCEPTED_FORMATS: .ZIP</p>
@@ -379,6 +379,7 @@
       frameSize.textContent = formatBytes(file.size);
       dropArea.classList.add('d-none');
       fileInfo.classList.remove('d-none');
+      document.getElementById('uploadIcon')?.classList.add('file-loaded');
       refreshModelPicker();
       updateCascadeScanButton();  // Also update for cascade mode
     }
@@ -389,6 +390,7 @@
     fileInput.value = '';
     dropArea.classList.remove('d-none');
     fileInfo.classList.add('d-none');
+    document.getElementById('uploadIcon')?.classList.remove('file-loaded');
     refreshModelPicker();
     updateCascadeScanButton();  // Also update for cascade mode
   });
@@ -401,6 +403,7 @@
       frameSize.textContent = '4.2 MB';
       dropArea.classList.add('d-none');
       fileInfo.classList.remove('d-none');
+      document.getElementById('uploadIcon')?.classList.add('file-loaded');
       refreshModelPicker();
       updateCascadeScanButton();  // Also update for cascade mode
     });

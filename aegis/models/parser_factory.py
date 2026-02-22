@@ -10,6 +10,7 @@ from aegis.models.parsers import (
     HFTextClassificationParser,
     FallbackParser,
     ToolResultParser,
+    ClaudeCodeSecurityParser,
 )
 
 # Built-in parser registry
@@ -19,6 +20,7 @@ _PARSER_CLASSES: Dict[str, Type[BaseParser]] = {
     "hf_classification": HFTextClassificationParser,
     "fallback": FallbackParser,
     "tool_result": ToolResultParser,
+    "claude_code_security": ClaudeCodeSecurityParser,
 }
 
 

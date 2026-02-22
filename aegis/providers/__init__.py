@@ -27,6 +27,7 @@ from aegis.providers.anthropic_provider import AnthropicProvider
 from aegis.providers.google_provider import GoogleProvider
 from aegis.providers.hf_local import HFLocalProvider, create_hf_provider
 from aegis.providers.tool_provider import ToolProvider
+from aegis.providers.claude_code_security import ClaudeCodeSecurityProvider
 
 # Provider registry for plugin-style discovery
 # Maps provider type names to their implementation classes
@@ -36,6 +37,7 @@ PROVIDER_REGISTRY: Dict[str, Type[Any]] = {
     "google": GoogleProvider,
     "hf_local": HFLocalProvider,
     "tool": ToolProvider,
+    "claude_code_security": ClaudeCodeSecurityProvider,
 }
 
 
@@ -92,6 +94,8 @@ __all__ = [
     "create_hf_provider",
     # Tool adapter
     "ToolProvider",
+    # Agentic
+    "ClaudeCodeSecurityProvider",
     # Registry
     "PROVIDER_REGISTRY",
     "register_provider",

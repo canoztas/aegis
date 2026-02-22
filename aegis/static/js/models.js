@@ -4,6 +4,7 @@ document.addEventListener("DOMContentLoaded", function () {
   loadOllamaModels(false);
   loadHuggingFaceModels();
   loadMLPresets();
+  loadAgenticPresets();
 
   // Initialize cloud model presets
   if (document.getElementById("cloudProviderType")) {
@@ -26,6 +27,8 @@ document.addEventListener("DOMContentLoaded", function () {
   window.openTestModelModal = openTestModelModal;
   window.saveRegisteredModel = saveRegisteredModel;
   window.runTestModel = runTestModel;
+  window.loadAgenticPresets = loadAgenticPresets;
+  window.installAgenticPreset = installAgenticPreset;
 });
 
 async function fetchJson(url, options, fallbackUrls) {
@@ -912,3 +915,128 @@ function openHFPresetModal(presetId) {
 }
 
 function registerHFPresetFromModal() { } // formatting
+
+// ============================================================================
+// Agentic Models (Claude Code Security, etc.)
+// ============================================================================
+
+async function loadAgenticPresets() {
+  try {
+    const [presetsRes, regRes] = await Promise.all([
+      fetchJson("/api/models/agentic/presets"),
+      fetchJson("/api/models/registry", null, ["/api/models/registered"])
+    ]);
+
+    const container = document.getElementById("agenticPresetsList");
+    const banner = document.getElementById("agenticCliBanner");
+    const presets = presetsRes.presets || [];
+    const cliAvailable = presetsRes.cli_available;
+
+    // Show/hide CLI warning banner
+    if (banner) {
+      banner.style.display = cliAvailable ? "none" : "block";
+    }
+
+    if (presets.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-4 text-secondary font-monospace small">
+          <i class="bi bi-inbox fs-4 d-block mb-2 opacity-50"></i>
+          NO_PRESETS_AVAILABLE
+        </div>`;
+      return;
+    }
+
+    const regModels = regRes.models || [];
+    const regIds = new Set(regModels
+      .filter(m => m.model_type === "claude_code" || m.provider_id === "claude_code_security")
+      .map(m => {
+        const id = m.model_id || m.id;
+        if (id && id.includes(":")) {
+          return id.substring(id.indexOf(":") + 1);
+        }
+        return m.model_name || id;
+      })
+    );
+
+    let html = '';
+    presets.forEach(preset => {
+      const isInstalled = regIds.has(preset.preset_id);
+      const settings = preset.settings || {};
+
+      html += `
+        <div class="list-group-item bg-panel border-subtle text-light p-4 mb-2">
+          <div class="d-flex justify-content-between align-items-start gap-3">
+            <div class="flex-grow-1">
+              <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                <span class="fw-bold text-white">${preset.name}</span>
+                ${cliAvailable
+                  ? '<span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25 rounded-0 font-monospace extra-small">CLI READY</span>'
+                  : '<span class="badge bg-warning bg-opacity-25 text-warning border border-warning border-opacity-25 rounded-0 font-monospace extra-small">CLI NOT FOUND</span>'}
+              </div>
+              <div class="text-light opacity-75 small mb-2">${preset.description}</div>
+              <div class="d-flex flex-wrap gap-2">
+                ${(preset.recommended_roles || []).map(r =>
+                  `<span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25 rounded-0 small font-monospace">${String(r).replace(/_/g, " ").toUpperCase()}</span>`
+                ).join('')}
+                ${settings.claude_model ? `<span class="text-secondary font-monospace small"><i class="bi bi-cpu me-1"></i>${settings.claude_model}</span>` : ''}
+                ${settings.max_turns ? `<span class="text-secondary font-monospace small"><i class="bi bi-arrow-repeat me-1"></i>${settings.max_turns} turns</span>` : ''}
+                ${settings.timeout ? `<span class="text-secondary font-monospace small"><i class="bi bi-clock me-1"></i>${settings.timeout}s</span>` : ''}
+              </div>
+            </div>
+            <div class="flex-shrink-0 ms-3">
+              ${isInstalled
+                ? '<span class="badge bg-success text-white border border-success rounded-0 p-2 font-monospace"><i class="bi bi-check2-circle me-2"></i>INSTALLED</span>'
+                : `<button class="btn btn-success fw-bold rounded-0 font-monospace px-4 py-2 shadow-sm" onclick="installAgenticPreset('${preset.preset_id}')" ${!cliAvailable ? 'title="Claude CLI not found"' : ''}><i class="bi bi-plus-circle me-2"></i>ADD</button>`
+              }
+            </div>
+          </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+  } catch (error) {
+    console.error("Agentic presets load error:", error);
+    const container = document.getElementById("agenticPresetsList");
+    if (container) {
+      container.innerHTML = `
+        <div class="alert alert-danger font-monospace small m-2">
+          LOAD_ERROR: ${error.message}
+        </div>`;
+    }
+  }
+}
+
+async function installAgenticPreset(presetId) {
+  const btn = event?.target?.closest('button');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>ADDING...';
+  }
+
+  try {
+    const response = await fetch("/api/models/agentic/register_preset", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preset_id: presetId })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || data.error) {
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+
+    const statusVal = data.status || "added";
+    const statusMsg = statusVal === "ready"
+      ? "Claude CLI detected - model is ready to scan."
+      : "Model registered. Install Claude CLI to enable scanning.";
+
+    showToast("Added", `Agentic model registered. ${statusMsg}`, "success");
+
+    loadAgenticPresets();
+    loadRegisteredModels();
+  } catch (error) {
+    showToast("Error", `Registration failed: ${error.message}`, "danger");
+    loadAgenticPresets();
+  }
+}
