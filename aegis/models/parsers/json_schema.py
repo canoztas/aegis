@@ -242,8 +242,27 @@ class JSONFindingsParser(BaseParser):
             else:
                 findings_list = [findings_list]
 
+        # Handle string values: try to parse as JSON or treat as empty
+        if isinstance(findings_list, str):
+            stripped = findings_list.strip()
+            if not stripped or any(p in stripped.lower() for p in ("no vulnerabilit", "no issue", "no finding")):
+                logger.info("'findings' is an empty/no-findings string, returning []")
+                return []
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    findings_list = parsed
+                elif isinstance(parsed, dict):
+                    findings_list = [parsed]
+                else:
+                    logger.warning("'findings' field is a string that parsed to non-list/dict: %s", type(parsed))
+                    return []
+            except json.JSONDecodeError:
+                logger.warning("'findings' field is an unparseable string: %s", stripped[:200])
+                return []
+
         if not isinstance(findings_list, list):
-            logger.warning("'findings' field is not a list")
+            logger.warning("'findings' field is not a list (type=%s): %s", type(findings_list).__name__, str(findings_list)[:200])
             return []
 
         default_file = context.get("file_path", "unknown")

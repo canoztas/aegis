@@ -50,6 +50,11 @@ class ClaudeCodeSecurityParser(JSONFindingsParser):
         # ── Step 1: Unwrap CLI envelope if present ──────────────────────
         text = self._unwrap_envelope(raw_output)
 
+        logger.debug(
+            "[claude-code-parser] unwrapped text (first 500 chars): %s",
+            str(text)[:500],
+        )
+
         # ── Step 2: Fast-path for clearly empty responses ───────────────
         if self._is_empty_response(text):
             return ParserResult(findings=[], parse_errors=[])
