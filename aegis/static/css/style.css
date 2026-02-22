@@ -299,9 +299,21 @@ body[data-page="history"] .aegis-icon {
 }
 
 body[data-page="report"] .aegis-icon {
-  filter: invert(1) sepia(1) saturate(5) hue-rotate(-10deg) brightness(1.1)
-          drop-shadow(0 0 8px rgba(194, 60, 42, 0.6));
+  filter: invert(1) sepia(1) saturate(10) hue-rotate(0deg) brightness(1.0)
+          drop-shadow(0 0 12px rgba(255, 0, 0, 0.8)) !important;
 }
+
+/* AEGIS title — matches icon color per tab */
+.aegis-title {
+  color: #2c8c7f;
+  transition: color 0.4s ease;
+}
+
+body[data-page="scan"] .aegis-title { color: #2c8c7f; }
+body[data-page="models"] .aegis-title { color: #58a6ff; }
+body[data-page="gpu"] .aegis-title { color: #ffd700; }
+body[data-page="history"] .aegis-title { color: #a078ff; }
+body[data-page="report"] .aegis-title { color: #ff3333; }
 
 /* Upload area: square shape */
 .upload-area {
