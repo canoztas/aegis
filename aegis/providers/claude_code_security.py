@@ -145,7 +145,8 @@ class ClaudeCodeSecurityProvider:
         """
         self.model_name = model_name
         self.cli_path = cli_path or shutil.which("claude") or "claude"
-        self.max_turns = max_turns
+        # --json-schema forces an extra internal turn, so ensure at least 2
+        self.max_turns = max(max_turns, 2)
         self.timeout = timeout
         self.skip_permissions = skip_permissions
         self.tools = tools if tools is not None else []
@@ -266,20 +267,42 @@ class ClaudeCodeSecurityProvider:
 
         if proc.returncode != 0:
             stderr = (proc.stderr or "").strip()
+            stdout = (proc.stdout or "").strip()
+            # Log both streams for debugging
+            logger.error(
+                "Claude Code CLI failed (code=%d)\nSTDERR: %s\nSTDOUT: %s",
+                proc.returncode, stderr[:500], stdout[:500],
+            )
             # Detect common failure modes and provide actionable messages
-            if "api key" in stderr.lower() or "unauthorized" in stderr.lower():
+            combined = f"{stderr} {stdout}".lower()
+            if "api key" in combined or "unauthorized" in combined:
                 raise RuntimeError(
                     "Claude Code CLI authentication failed. "
                     "Run 'claude login' or set ANTHROPIC_API_KEY."
                 )
-            if "rate limit" in stderr.lower() or "429" in stderr:
+            if "rate limit" in combined or "429" in combined:
                 raise RuntimeError(
                     "Anthropic API rate limit exceeded. "
                     "Wait a moment and retry, or reduce max_turns."
                 )
+            # CLI exits non-zero for max_turns errors but stdout may still
+            # contain a usable result — try to parse before raising.
+            if stdout:
+                try:
+                    envelope = json.loads(self._extract_last_json_object(stdout) or "{}")
+                    if envelope.get("result"):
+                        logger.warning(
+                            "Claude Code CLI exited %d but produced a result; using it.",
+                            proc.returncode,
+                        )
+                        return str(envelope["result"])
+                except Exception:
+                    pass
+
+            detail = stderr or stdout
             raise RuntimeError(
                 f"Claude Code CLI exited with code {proc.returncode}: "
-                f"{stderr[:500]}"
+                f"{detail[:500]}"
             )
 
         return self._parse_cli_output(proc.stdout)
