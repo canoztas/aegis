@@ -94,6 +94,29 @@ except ImportError:
     )
 
 
+def _sanitize_eos_token_ids(tokenizer: Any = None, model: Any = None) -> None:
+    """Convert set-typed eos_token_id to list across tokenizer/model/generation_config.
+
+    Transformers >=5.x may represent eos_token_id as a ``set`` (e.g. Mistral).
+    ``pipeline()`` and ``model.generate()`` expect ``int`` or ``list``, so we
+    normalise every place where it can hide.
+    """
+    objects = []
+    for src in (tokenizer, model):
+        if src is None:
+            continue
+        objects.append(src)
+        if hasattr(src, "config"):
+            objects.append(src.config)
+        if hasattr(src, "generation_config"):
+            objects.append(src.generation_config)
+    for obj in objects:
+        for attr in ("eos_token_id", "pad_token_id", "bos_token_id"):
+            val = getattr(obj, attr, None)
+            if isinstance(val, set):
+                setattr(obj, attr, list(val))
+
+
 class HFLocalProvider:
     """
     Provider for running HuggingFace models locally.
@@ -841,11 +864,15 @@ class HFLocalProvider:
                     )
                     peft_model = _PeftModel.from_pretrained(base_model, self.adapter_id)
 
+                    # Newer tokenizers (e.g. Mistral) may return eos_token_id as a
+                    # set, which causes "unhashable type: 'set'" inside pipeline().
+                    # Sanitize all config objects that may carry eos_token_id.
+                    _sanitize_eos_token_ids(tokenizer, peft_model)
+
                     self._pipeline = _pipeline(
                         self.task_type,
                         model=peft_model,
                         tokenizer=tokenizer,
-                        framework="pt",
                     )
                 else:
                     # If device_map is provided (Accelerate flow), do not pass device argument
@@ -854,7 +881,6 @@ class HFLocalProvider:
                     pipeline_kwargs = {
                         "task": self.task_type,
                         "model": self.model_id,
-                        "framework": "pt",  # force PyTorch to avoid Keras/TensorFlow path
                         **safe_kwargs,
                     }
                     if device_arg:
@@ -863,6 +889,9 @@ class HFLocalProvider:
                     self._pipeline = _pipeline(**pipeline_kwargs)
                 self._model = getattr(self._pipeline, "model", None)
                 self._tokenizer = getattr(self._pipeline, "tokenizer", None)
+
+                # Sanitize set-typed eos_token_id after pipeline creation
+                _sanitize_eos_token_ids(self._tokenizer, self._model)
                 logger.info(f"Model loaded successfully: {self.model_id}")
             except Exception as e:
                 err_str = str(e)
@@ -988,8 +1017,14 @@ class HFLocalProvider:
                 safe_kwargs.pop(key, None)
 
             if self._tokenizer.eos_token_id is not None:
-                safe_kwargs.setdefault("eos_token_id", self._tokenizer.eos_token_id)
-                safe_kwargs.setdefault("pad_token_id", self._tokenizer.eos_token_id)
+                eos_id = self._tokenizer.eos_token_id
+                # Some tokenizers return a set for eos_token_id (e.g. Mistral);
+                # model.generate() expects an int or list, not a set.
+                if isinstance(eos_id, set):
+                    eos_id = list(eos_id)
+                pad_id = eos_id[0] if isinstance(eos_id, list) else eos_id
+                safe_kwargs.setdefault("eos_token_id", eos_id)
+                safe_kwargs.setdefault("pad_token_id", pad_id)
 
             if "max_new_tokens" not in safe_kwargs or safe_kwargs["max_new_tokens"] is None:
                 safe_kwargs["max_new_tokens"] = 256
