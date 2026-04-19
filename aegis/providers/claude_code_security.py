@@ -145,8 +145,8 @@ class ClaudeCodeSecurityProvider:
         """
         self.model_name = model_name
         self.cli_path = cli_path or shutil.which("claude") or "claude"
-        # --json-schema forces an extra internal turn, so ensure at least 2
-        self.max_turns = max(max_turns, 2)
+        # --json-schema forces extra internal turns for structured output
+        self.max_turns = max(max_turns, 5)
         self.timeout = timeout
         self.skip_permissions = skip_permissions
         self.tools = tools if tools is not None else []
