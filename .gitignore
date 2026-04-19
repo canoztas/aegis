@@ -77,7 +77,8 @@ tests/
 conftest.py
 
 # Scripts (development/migration only)
-scripts/
+scripts/*
+!scripts/recompute_consensus.py
 *.py.backup
 check_*.py
 migrate_*.py

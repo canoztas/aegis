@@ -1,8 +1,14 @@
 """Consensus engine for merging findings from multiple models."""
 import hashlib
-from typing import Dict, List, Literal, Optional, Any, Set
+from typing import Dict, List, Literal, Optional, Any, Set, Tuple
 from aegis.data_models import Finding, ModelResponse
 from aegis.prompt_builder import PromptBuilder
+
+# Lines of slack used when deciding whether two findings refer to the same
+# location. Different models often report slightly different line ranges for
+# the same weakness, so we allow a small gap before treating two findings as
+# unrelated.
+_LINE_OVERLAP_SLACK = 5
 
 # Valid consensus strategies including the new cascade strategy
 CONSENSUS_STRATEGIES = ["union", "majority_vote", "weighted_vote", "judge", "cascade"]
@@ -54,68 +60,57 @@ class ConsensusEngine:
 
     def _union_strategy(self, responses: List[ModelResponse]) -> List[Finding]:
         """Union strategy: merge all findings and deduplicate."""
-        all_findings = []
-        for response in responses:
-            all_findings.extend(response.findings)
-
-        return self._deduplicate_findings(all_findings)
+        tagged = [
+            (finding, response.model_id)
+            for response in responses
+            for finding in response.findings
+        ]
+        return [self._merge_cluster(cluster) for cluster in self._cluster_findings(tagged)]
 
     def _majority_vote_strategy(self, responses: List[ModelResponse]) -> List[Finding]:
-        """Majority vote: require >50% model agreement."""
+        """Keep findings that at least two distinct models report in overlapping
+        line ranges of the same file and CWE family.
+
+        Two models agreeing on the same weakness at the same location is a
+        strong signal, so we require >=2 rather than the historic strict
+        >50% threshold (which, with 5+ heterogeneous models and divergent
+        CWE labelling, almost never cleared).
+        """
         if len(responses) == 1:
             return responses[0].findings
 
-        # Group findings by normalized key
-        finding_groups: Dict[str, List[Finding]] = {}
-
-        for response in responses:
-            for finding in response.findings:
-                key = self._normalize_finding_key(finding)
-                if key not in finding_groups:
-                    finding_groups[key] = []
-                finding_groups[key].append(finding)
-
-        # Keep only findings with majority agreement
-        threshold = len(responses) / 2
+        tagged = [
+            (finding, response.model_id)
+            for response in responses
+            for finding in response.findings
+        ]
         consensus_findings = []
-
-        for key, findings in finding_groups.items():
-            if len(findings) > threshold:
-                # Merge findings: take max confidence, most informative message
-                merged = self._merge_finding_group(findings)
-                consensus_findings.append(merged)
-
+        for cluster in self._cluster_findings(tagged):
+            distinct_models = {mid for _, mid in cluster}
+            if len(distinct_models) >= 2:
+                consensus_findings.append(self._merge_cluster(cluster))
         return consensus_findings
 
     def _weighted_vote_strategy(
         self, responses: List[ModelResponse], weights: Dict[str, float]
     ) -> List[Finding]:
-        """Weighted vote: same as majority but with model weights."""
+        """Weighted vote: sum per-model weights across overlapping clusters."""
         if len(responses) == 1:
             return responses[0].findings
 
-        # Group findings by normalized key
-        finding_groups: Dict[str, List[Finding]] = {}
+        tagged = [
+            (finding, response.model_id)
+            for response in responses
+            for finding in response.findings
+        ]
 
-        for response in responses:
-            weight = weights.get(response.model_id, 1.0)
-            for finding in response.findings:
-                key = self._normalize_finding_key(finding)
-                if key not in finding_groups:
-                    finding_groups[key] = []
-                finding_groups[key].append((finding, weight))
-
-        # Calculate weighted scores
-        consensus_findings = []
         total_weight = sum(weights.get(r.model_id, 1.0) for r in responses)
-
-        for key, weighted_findings in finding_groups.items():
-            weighted_sum = sum(weight for _, weight in weighted_findings)
-            if weighted_sum > (total_weight / 2):  # Majority by weight
-                findings = [f for f, _ in weighted_findings]
-                merged = self._merge_finding_group(findings)
-                consensus_findings.append(merged)
-
+        consensus_findings = []
+        for cluster in self._cluster_findings(tagged):
+            distinct_models = {mid for _, mid in cluster}
+            cluster_weight = sum(weights.get(mid, 1.0) for mid in distinct_models)
+            if cluster_weight > total_weight / 2:
+                consensus_findings.append(self._merge_cluster(cluster))
         return consensus_findings
 
     def _judge_strategy(
@@ -201,46 +196,135 @@ class ConsensusEngine:
 
         return consensus_findings
 
+    @staticmethod
+    def _normalize_cwe(cwe: str) -> str:
+        """Reduce a CWE string to a stable clustering token.
+
+        If the input contains a non-zero numeric component (e.g. 'CWE-079',
+        'XSS (79)') we return that integer as a string — this lets equivalent
+        CWEs expressed with different prefixes/padding collide into one bucket.
+
+        Otherwise we fall back to a slug of the raw string (lowercased,
+        non-alphanumerics stripped) so that unknown codes like 'CWE-000',
+        'CSRF' or 'potential_vulnerability' remain distinct buckets rather
+        than all collapsing into one catch-all "unknown" cluster.
+        """
+        if not cwe:
+            return ""
+        digits = "".join(ch for ch in cwe if ch.isdigit())
+        if digits:
+            try:
+                num = int(digits)
+            except ValueError:
+                num = 0
+            if num != 0:
+                return str(num)
+        slug = "".join(ch for ch in cwe.lower() if ch.isalnum())
+        return slug
+
     def _normalize_finding_key(self, finding: Finding) -> str:
-        """Create normalized key for finding deduplication."""
-        # Normalize line ranges to buckets (±2 lines)
-        line_bucket_start = (finding.start_line // 5) * 5
-        line_bucket_end = ((finding.end_line + 4) // 5) * 5
+        """Coarse key: file + CWE family.
 
-        # Normalize message (lowercase, remove extra whitespace)
-        normalized_message = " ".join(finding.message.lower().split())
+        Kept for callers that need a hashable grouping key. Fine-grained
+        line-overlap clustering happens in :meth:`_cluster_findings`.
+        """
+        key_parts = [finding.file or "", self._normalize_cwe(finding.cwe)]
+        return hashlib.sha1("|".join(key_parts).encode()).hexdigest()
 
-        # Create key
-        key_parts = [
-            finding.cwe,
-            finding.file,
-            str(line_bucket_start),
-            str(line_bucket_end),
-            normalized_message[:50],  # First 50 chars
-        ]
+    def _cluster_findings(
+        self, tagged: List[Tuple[Finding, str]]
+    ) -> List[List[Tuple[Finding, str]]]:
+        """Cluster findings so that the same underlying weakness reported by
+        multiple models ends up in one group.
 
-        key_string = "|".join(key_parts)
-        return hashlib.sha1(key_string.encode()).hexdigest()
+        Two findings belong to the same cluster when they share a file and
+        CWE family and their line ranges overlap (with a small slack). This
+        replaces the earlier exact-bucket key, which fragmented clusters when
+        one model pointed at a single line and another reported the
+        surrounding block.
+        """
+        # First bucket by the coarse file+cwe key so we only run the quadratic
+        # overlap check within small groups.
+        buckets: Dict[str, List[Tuple[Finding, str]]] = {}
+        for item in tagged:
+            buckets.setdefault(self._normalize_finding_key(item[0]), []).append(item)
+
+        clusters: List[List[Tuple[Finding, str]]] = []
+        for items in buckets.values():
+            n = len(items)
+            if n == 1:
+                clusters.append(items)
+                continue
+
+            parent = list(range(n))
+
+            def find(x: int) -> int:
+                while parent[x] != x:
+                    parent[x] = parent[parent[x]]
+                    x = parent[x]
+                return x
+
+            def union(a: int, b: int) -> None:
+                ra, rb = find(a), find(b)
+                if ra != rb:
+                    parent[ra] = rb
+
+            for i in range(n):
+                fi = items[i][0]
+                for j in range(i + 1, n):
+                    fj = items[j][0]
+                    if self._line_ranges_overlap(
+                        fi.start_line, fi.end_line, fj.start_line, fj.end_line
+                    ):
+                        union(i, j)
+
+            groups: Dict[int, List[Tuple[Finding, str]]] = {}
+            for idx, item in enumerate(items):
+                groups.setdefault(find(idx), []).append(item)
+            clusters.extend(groups.values())
+
+        return clusters
+
+    @staticmethod
+    def _line_ranges_overlap(a_start: int, a_end: int, b_start: int, b_end: int) -> bool:
+        """Return True if [a_start, a_end] and [b_start, b_end] overlap within
+        ``_LINE_OVERLAP_SLACK`` lines of slack."""
+        if a_end < a_start:
+            a_end = a_start
+        if b_end < b_start:
+            b_end = b_start
+        return (
+            a_start - _LINE_OVERLAP_SLACK <= b_end
+            and b_start - _LINE_OVERLAP_SLACK <= a_end
+        )
 
     def _deduplicate_findings(self, findings: List[Finding]) -> List[Finding]:
-        """Deduplicate findings based on normalized keys."""
-        seen_keys: Dict[str, Finding] = {}
+        """Deduplicate findings via overlap clustering, one finding per cluster."""
+        tagged = [(f, "") for f in findings]
+        return [self._merge_cluster(cluster) for cluster in self._cluster_findings(tagged)]
 
-        for finding in findings:
-            key = self._normalize_finding_key(finding)
+    def _merge_cluster(self, cluster: List[Tuple[Finding, str]]) -> Finding:
+        """Merge a clustered (finding, model_id) tuple list into one Finding,
+        preserving the set of distinct model ids on ``contributing_models``.
 
-            if key not in seen_keys:
-                seen_keys[key] = finding
-            else:
-                # Merge: keep the one with higher confidence or more informative message
-                existing = seen_keys[key]
-                if (
-                    finding.confidence > existing.confidence
-                    or len(finding.message) > len(existing.message)
-                ):
-                    seen_keys[key] = finding
-
-        return list(seen_keys.values())
+        Any ids already present on the input findings (e.g. from judge-model
+        outputs or earlier merges) are carried through so that nested merges
+        don't lose attribution.
+        """
+        findings = [f for f, _ in cluster]
+        merged = self._merge_finding_group(findings)
+        contributors: List[str] = []
+        seen: Set[str] = set()
+        for finding, model_id in cluster:
+            for mid in finding.contributing_models or []:
+                if mid and mid not in seen:
+                    seen.add(mid)
+                    contributors.append(mid)
+            if model_id and model_id not in seen:
+                seen.add(model_id)
+                contributors.append(model_id)
+        merged.contributing_models = contributors
+        return merged
 
     def _merge_finding_group(self, findings: List[Finding]) -> Finding:
         """Merge a group of similar findings into one."""

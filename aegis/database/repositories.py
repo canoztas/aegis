@@ -425,16 +425,18 @@ class FindingRepository:
         if not findings:
             return
 
+        import json as _json
         db = get_db()
         with db.get_connection() as conn:
             conn.executemany("""
                 INSERT INTO findings (scan_id, model_id, is_consensus, fingerprint,
                                       name, severity, cwe, file, start_line, end_line,
-                                      message, confidence)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      message, confidence, contributing_models)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, [
                 (scan_id, model_id, is_consensus, f.fingerprint, f.name, f.severity,
-                 f.cwe, f.file, f.start_line, f.end_line, f.message, f.confidence)
+                 f.cwe, f.file, f.start_line, f.end_line, f.message, f.confidence,
+                 _json.dumps(f.contributing_models) if f.contributing_models else None)
                 for f in findings
             ])
             conn.commit()

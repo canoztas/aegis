@@ -289,6 +289,33 @@ function renderWarRoom(data) {
     `;
 }
 
+function formatModelIdForBadge(modelId) {
+  if (!modelId) return "";
+  const parts = String(modelId).split(":");
+  return parts[parts.length - 1] || String(modelId);
+}
+
+function renderContributingModelsBadges(finding) {
+  const models = Array.isArray(finding.contributing_models)
+    ? finding.contributing_models.filter(Boolean)
+    : [];
+  if (models.length === 0) return "";
+  const badges = models
+    .map(
+      (m) =>
+        `<span class="badge bg-surface border border-subtle text-primary font-monospace" title="${escapeHtml(m)}">${escapeHtml(formatModelIdForBadge(m))}</span>`
+    )
+    .join(" ");
+  return `
+    <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+      <small class="text-secondary font-monospace text-uppercase" style="letter-spacing: 0.08em;">
+        <i class="bi bi-people-fill me-1"></i>Confirmed by ${models.length} model${models.length === 1 ? "" : "s"}:
+      </small>
+      ${badges}
+    </div>
+  `;
+}
+
 async function renderFindingCard(finding) {
   // Store finding for reference
   if (!Array.isArray(window.currentFindings)) {
@@ -303,6 +330,7 @@ async function renderFindingCard(finding) {
     finding.end_line,
     finding.severity
   );
+  const contributingBadges = renderContributingModelsBadges(finding);
 
   return `
     <div class="vuln-card severity-${finding.severity}" style="--severity-color: ${severityColor};">
@@ -319,7 +347,7 @@ async function renderFindingCard(finding) {
                   <i class="bi bi-bug-fill me-2" style="color: ${severityColor};"></i>
                   ${escapeHtml(finding.name || "Unnamed Vulnerability")}
                 </h5>
-                <button class="btn btn-sm btn-outline-primary rounded-0 font-monospace" 
+                <button class="btn btn-sm btn-outline-primary rounded-0 font-monospace"
                         onclick="openCinematicInspector(window.currentFindings[${findingIndex}])">
                     <i class="bi bi-eye me-2"></i>INSPECT_VECTOR
                 </button>
@@ -337,6 +365,7 @@ async function renderFindingCard(finding) {
           <p class="mb-0 text-secondary">${escapeHtml(finding.message || "No description available")}</p>
         </div>
         ${codeSnippet}
+        ${contributingBadges}
         ${finding.fingerprint ? `<div class="mt-3 pt-3 border-top border-subtle">
           <small class="text-secondary font-monospace">FINGERPRINT: <code class="text-primary">${escapeHtml(finding.fingerprint)}</code></small>
         </div>` : ""}

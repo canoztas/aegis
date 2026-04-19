@@ -16,6 +16,9 @@ class Finding:
     message: str
     confidence: float  # 0.0 to 1.0
     fingerprint: str  # stable identifier across runs
+    # Model ids that contributed to this finding (populated for consensus
+    # findings; empty for single-model findings).
+    contributing_models: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -29,11 +32,21 @@ class Finding:
             "message": self.message,
             "confidence": self.confidence,
             "fingerprint": self.fingerprint,
+            "contributing_models": list(self.contributing_models),
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Finding":
         """Create from dictionary."""
+        raw_models = data.get("contributing_models") or data.get("contributing_models_json")
+        if isinstance(raw_models, str):
+            import json as _json
+            try:
+                raw_models = _json.loads(raw_models) if raw_models else []
+            except (ValueError, TypeError):
+                raw_models = []
+        if not isinstance(raw_models, list):
+            raw_models = []
         return cls(
             name=data.get("name", "Security Issue"),
             severity=data.get("severity", "medium"),
@@ -44,6 +57,7 @@ class Finding:
             message=data.get("message", ""),
             confidence=data.get("confidence", 0.5),
             fingerprint=data.get("fingerprint", ""),
+            contributing_models=[str(m) for m in raw_models if m],
         )
 
 

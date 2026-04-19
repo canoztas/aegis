@@ -42,11 +42,30 @@ class Database:
                 with open(schema_path, 'r', encoding='utf-8') as f:
                     schema_sql = f.read()
                 conn.executescript(schema_sql)
+                self._apply_migrations(conn)
                 conn.commit()
             logger.info("Database schema initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize schema: {e}")
             raise
+
+    def _apply_migrations(self, conn: sqlite3.Connection) -> None:
+        """Apply lightweight additive migrations for existing databases.
+
+        ``CREATE TABLE IF NOT EXISTS`` leaves schemas intact on existing
+        databases, so any column added to ``schema.sql`` after the initial
+        release also needs an explicit ALTER TABLE here.
+        """
+        additive_columns = [
+            ("findings", "contributing_models", "TEXT"),
+        ]
+        for table, column, decl in additive_columns:
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column name" in str(exc).lower():
+                    continue
+                logger.warning("Migration skipped for %s.%s: %s", table, column, exc)
 
     @contextmanager
     def get_connection(self):

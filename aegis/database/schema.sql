@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS findings (
     end_line INTEGER NOT NULL,
     message TEXT NOT NULL,
     confidence REAL NOT NULL,
+    contributing_models TEXT,            -- JSON array of model_ids that contributed to a consensus finding
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (scan_id) REFERENCES scans(scan_id) ON DELETE CASCADE
 );
