@@ -54,15 +54,15 @@ class ModelRuntime:
         self._active_count = 0
         self._active_lock = threading.Lock()
 
-    def is_idle(self) -> bool:
-        """True when no run()/run_batch() call is currently executing."""
-        with self._active_lock:
-            return self._active_count == 0
-
         # Rate limiter and cost tracker for cloud providers
         self.rate_limiter = None
         self.cost_tracker = None
         self._setup_cloud_features()
+
+    def is_idle(self) -> bool:
+        """True when no run()/run_batch() call is currently executing."""
+        with self._active_lock:
+            return self._active_count == 0
 
     def _setup_cloud_features(self):
         """Setup rate limiter and cost tracker for cloud providers."""
