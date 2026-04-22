@@ -154,7 +154,6 @@ class BaseConnector(ABC):
 
             except Exception as e:
                 last_exception = e
-                self.record_failure()
 
                 if attempt < self.retry_max_attempts - 1:
                     backoff = self.retry_backoff_factor ** attempt
@@ -164,6 +163,12 @@ class BaseConnector(ABC):
                     )
                     time.sleep(backoff)
                 else:
+                    # Only count the outermost call as a single failure;
+                    # intermediate retries for the same request don't tell us
+                    # anything new about downstream health and would otherwise
+                    # trip the breaker ``retry_max_attempts`` times faster
+                    # than the configured threshold implies.
+                    self.record_failure()
                     print(f"All retries exhausted. Last error: {str(e)}")
 
         raise last_exception
