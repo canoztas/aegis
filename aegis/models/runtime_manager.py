@@ -48,6 +48,16 @@ class ModelRuntime:
         self.keep_alive_seconds = self.runtime_spec.keep_alive_seconds
         self.last_used = time.time()
         self._semaphore = threading.Semaphore(self.runtime_spec.max_concurrency)
+        # Active inference count — incremented while a run()/run_batch() is in
+        # flight. The prune loop checks this so the idle-eviction path never
+        # rips the provider out from under a live scan.
+        self._active_count = 0
+        self._active_lock = threading.Lock()
+
+    def is_idle(self) -> bool:
+        """True when no run()/run_batch() call is currently executing."""
+        with self._active_lock:
+            return self._active_count == 0
 
         # Rate limiter and cost tracker for cloud providers
         self.rate_limiter = None
@@ -149,6 +159,8 @@ class ModelRuntime:
                 logger.warning(f"Rate limit acquire failed: {e}")
 
         await asyncio.to_thread(self._semaphore.acquire)
+        with self._active_lock:
+            self._active_count += 1
         try:
             # Track start time for cost calculation
             start_time = time.time()
@@ -162,6 +174,9 @@ class ModelRuntime:
 
             return result
         finally:
+            with self._active_lock:
+                self._active_count -= 1
+            self.touch()
             self._semaphore.release()
 
     async def run_batch(
@@ -187,6 +202,8 @@ class ModelRuntime:
                 logger.warning(f"Rate limit acquire failed: {e}")
 
         await asyncio.to_thread(self._semaphore.acquire)
+        with self._active_lock:
+            self._active_count += 1
         try:
             # Track start time for cost calculation
             start_time = time.time()
@@ -209,6 +226,9 @@ class ModelRuntime:
 
             return results
         finally:
+            with self._active_lock:
+                self._active_count -= 1
+            self.touch()
             self._semaphore.release()
 
     def _log_api_usage(self, prompt: str, result: Any, scan_id: Optional[str], start_time: float):
@@ -256,20 +276,71 @@ class ModelRuntime:
             logger.warning(f"Failed to log API usage: {e}")
 
     def close(self) -> None:
+        # Release heavy model resources (HF GPU/CPU weights, tokenizer, etc.)
+        # before tearing down the runtime. Previously only close()/shutdown()
+        # ran here, which shut down thread pools but left the HF model
+        # pinned in memory — so TTL eviction never actually freed RAM.
+        unload_fn = getattr(self.provider, "unload", None)
+        if callable(unload_fn):
+            try:
+                try:
+                    unload_fn(clear_cuda_cache=True)
+                except TypeError:
+                    unload_fn()
+            except Exception:
+                logger.exception(
+                    "Provider unload failed during runtime.close() for %s",
+                    self.model.model_id,
+                )
         close_fn = getattr(self.provider, "close", None)
         if callable(close_fn):
-            close_fn()
+            try:
+                close_fn()
+            except Exception:
+                logger.exception(
+                    "Provider close failed for %s", self.model.model_id
+                )
         shutdown_fn = getattr(self.provider, "shutdown", None)
         if callable(shutdown_fn):
-            shutdown_fn()
+            try:
+                shutdown_fn()
+            except Exception:
+                logger.exception(
+                    "Provider shutdown failed for %s", self.model.model_id
+                )
 
 
 class ModelRuntimeManager:
     """Caches runtimes keyed by model+settings signature."""
 
+    # How often the background prune thread checks for idle runtimes.
+    _PRUNE_INTERVAL_SECONDS = 60
+
     def __init__(self):
         self._lock = threading.Lock()
         self._runtimes: Dict[str, ModelRuntime] = {}
+        self._stop_event = threading.Event()
+        self._prune_thread = threading.Thread(
+            target=self._prune_loop,
+            name="aegis-runtime-prune",
+            daemon=True,
+        )
+        self._prune_thread.start()
+
+    def _prune_loop(self) -> None:
+        """Evict idle runtimes in the background so that HF models don't sit
+        in memory indefinitely once scans stop arriving."""
+        while not self._stop_event.wait(self._PRUNE_INTERVAL_SECONDS):
+            try:
+                with self._lock:
+                    self._prune_locked(time.time())
+            except Exception:
+                logger.exception("Background runtime prune failed")
+
+    def shutdown(self) -> None:
+        """Stop the prune thread and clear all runtimes (for test teardown)."""
+        self._stop_event.set()
+        self.clear_all()
 
     def _runtime_key(self, model: ModelRecord) -> str:
         role_values = []
@@ -291,13 +362,25 @@ class ModelRuntimeManager:
         to_remove = []
         for key, runtime in self._runtimes.items():
             ttl = runtime.keep_alive_seconds
-            if ttl and ttl > 0 and (now - runtime.last_used) > ttl:
-                to_remove.append(key)
+            if not ttl or ttl <= 0:
+                continue
+            if (now - runtime.last_used) <= ttl:
+                continue
+            # Never rip a provider out from under an in-flight inference.
+            if not runtime.is_idle():
+                continue
+            to_remove.append(key)
 
         for key in to_remove:
             runtime = self._runtimes.pop(key, None)
             if runtime:
-                runtime.close()
+                try:
+                    runtime.close()
+                except Exception:
+                    logger.exception(
+                        "Runtime close failed during prune for %s",
+                        runtime.model.model_id,
+                    )
 
     def get_runtime(self, model: ModelRecord) -> ModelRuntime:
         key = self._runtime_key(model)

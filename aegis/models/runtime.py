@@ -57,7 +57,9 @@ def resolve_runtime(settings: Dict[str, Any], cuda_available: Optional[bool] = N
       settings.runtime.dtype: bf16|fp16|fp32
       settings.runtime.quantization: 4bit|8bit|none
       settings.runtime.max_concurrency: integer
-      settings.runtime.keep_alive_seconds: integer (0 = keep forever)
+      settings.runtime.keep_alive_seconds: integer (0 = keep forever;
+          default 600s so idle HF models free their memory instead of
+          accumulating across scans)
       settings.runtime.allow_fallback: bool (default True)
       settings.runtime.require_device: "cuda" to enforce GPU availability
     """
@@ -78,10 +80,16 @@ def resolve_runtime(settings: Dict[str, Any], cuda_available: Optional[bool] = N
         runtime.get("max_concurrency") or settings.get("max_concurrency"),
         1,
     )
-    keep_alive_seconds = _to_int(
-        runtime.get("keep_alive_seconds") or settings.get("keep_alive_seconds"),
-        0,
-    )
+    # Resolve `keep_alive_seconds` with explicit precedence so that a user
+    # intentionally setting 0 ("keep forever") is honoured instead of falling
+    # through the `or` chain to the default. Default of 600s lets idle
+    # runtimes (especially HF models) free their memory between scans.
+    raw_keep_alive = runtime.get("keep_alive_seconds")
+    if raw_keep_alive is None:
+        raw_keep_alive = settings.get("keep_alive_seconds")
+    if raw_keep_alive is None:
+        raw_keep_alive = 600
+    keep_alive_seconds = _to_int(raw_keep_alive, 600)
 
     if cuda_available is None:
         cuda_available = _detect_cuda_available()
