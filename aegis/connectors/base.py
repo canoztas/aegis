@@ -6,6 +6,16 @@ from typing import Dict, Any, Optional, AsyncIterator
 from datetime import datetime, timedelta
 
 
+class CircuitBreakerOpenError(Exception):
+    """Raised when the connector's circuit breaker is open.
+
+    Distinct from generic exceptions so the retry loop can fail fast without
+    counting the trip itself as another failure (which would reset the
+    cooldown window and keep the circuit open indefinitely under sustained
+    traffic).
+    """
+
+
 class TokenBucket:
     """Token bucket rate limiter."""
 
@@ -79,8 +89,8 @@ class BaseConnector(ABC):
         # Circuit breaker state
         self.circuit_breaker_failures = 0
         self.circuit_breaker_last_failure = None
-        self.circuit_breaker_threshold = 5
-        self.circuit_breaker_reset_timeout = 60  # seconds
+        self.circuit_breaker_threshold = 10
+        self.circuit_breaker_reset_timeout = 30  # seconds
 
     def is_circuit_open(self) -> bool:
         """Check if circuit breaker is open."""
@@ -127,14 +137,17 @@ class BaseConnector(ABC):
         last_exception = None
 
         for attempt in range(self.retry_max_attempts):
+            # Fail fast when the circuit is open — don't count this as a new
+            # failure (which would reset the cooldown window and keep the
+            # circuit open forever under sustained traffic) and don't retry,
+            # since the next attempt would just hit the same check.
+            if self.is_circuit_open():
+                raise CircuitBreakerOpenError(
+                    "Circuit breaker is open - too many failures"
+                )
+
             try:
-                # Apply rate limiting
                 self.rate_limiter.acquire()
-
-                # Check circuit breaker
-                if self.is_circuit_open():
-                    raise Exception("Circuit breaker is open - too many failures")
-
                 result = func(*args, **kwargs)
                 self.record_success()
                 return result
@@ -144,7 +157,6 @@ class BaseConnector(ABC):
                 self.record_failure()
 
                 if attempt < self.retry_max_attempts - 1:
-                    # Calculate backoff time
                     backoff = self.retry_backoff_factor ** attempt
                     print(
                         f"Retry {attempt + 1}/{self.retry_max_attempts} "
