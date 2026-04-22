@@ -30,6 +30,39 @@ def allowed_file(filename: Optional[str]) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_extensions
 
 
+_MINIFIED_BUNDLE_SUFFIXES = (
+    ".min.js",
+    ".min.css",
+    ".min.mjs",
+    ".bundle.js",
+    ".chunk.js",
+    "-min.js",
+    "-min.css",
+)
+
+
+def _is_minified_bundle(path: str, content: str) -> bool:
+    """Return True for minified/bundled assets that aren't worth scanning.
+
+    These files routinely blow up HF model attention buffers (a single 150 KB
+    bootstrap.min.css becomes ~40K tokens, pushing 7B models into 100+ GB
+    allocations) and rarely contain actionable security findings that aren't
+    already visible in the original source. We detect them by filename
+    heuristics first, then by a simple "very long lines" check for files
+    that slipped through without the ``.min`` suffix.
+    """
+    lower = path.lower()
+    if any(lower.endswith(suffix) for suffix in _MINIFIED_BUNDLE_SUFFIXES):
+        return True
+    # Heuristic: content has a line > 4000 chars. Human-written source code
+    # almost never exceeds that; bundled/transpiled output routinely does.
+    if content:
+        for line in content.splitlines():
+            if len(line) > 4000:
+                return True
+    return False
+
+
 def extract_source_files(zip_path: str) -> Dict[str, str]:
     source_files = {}
     source_extensions = {
@@ -60,6 +93,7 @@ def extract_source_files(zip_path: str) -> Dict[str, str]:
 
     try:
         debug_scan_log(f"[scan-debug] extracting zip: {zip_path}")
+        skipped_minified: List[str] = []
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
             for file_info in zip_ref.filelist:
                 if file_info.is_dir():
@@ -78,10 +112,19 @@ def extract_source_files(zip_path: str) -> Dict[str, str]:
                                 content = source_file.read().decode(
                                     "utf-8", errors="ignore"
                                 )
+                                if _is_minified_bundle(file_path, content):
+                                    skipped_minified.append(file_path)
+                                    continue
                                 source_files[file_path] = content
                         except Exception as e:
                             debug_scan_log(f"[scan-debug] failed reading {file_path}: {e}")
                             continue
+        if skipped_minified:
+            debug_scan_log(
+                f"[scan-debug] skipped {len(skipped_minified)} minified/bundled files: "
+                f"{', '.join(skipped_minified[:5])}"
+                + (" ..." if len(skipped_minified) > 5 else "")
+            )
 
     except zipfile.BadZipFile:
         raise ValueError("Invalid ZIP file")

@@ -993,6 +993,70 @@ class HFLocalProvider:
 
         return prompt
 
+    def _safe_max_input_tokens(self, gen_kwargs: Optional[Dict[str, Any]] = None) -> int:
+        """Compute a safe maximum number of input tokens for generation.
+
+        Prevents OOM crashes on long-context models (e.g. Mistral's 32K) that
+        would otherwise allocate >100GB attention buffers for minified assets
+        or large files. The cap is conservative by default (4096 tokens) but
+        honours an explicit ``max_input_length`` override in either the
+        provider settings or per-call generation kwargs.
+        """
+        gen_kwargs = gen_kwargs or {}
+
+        tokenizer_max = getattr(self._tokenizer, "model_max_length", None)
+        try:
+            tokenizer_max = int(tokenizer_max) if tokenizer_max is not None else None
+        except (TypeError, ValueError):
+            tokenizer_max = None
+        if tokenizer_max is None or tokenizer_max <= 0 or tokenizer_max > 100000:
+            tokenizer_max = 4096
+
+        explicit = gen_kwargs.get("max_input_length") or self.kwargs.get("max_input_length")
+        if explicit:
+            try:
+                tokenizer_max = int(explicit)
+            except (TypeError, ValueError):
+                pass
+
+        max_new = gen_kwargs.get("max_new_tokens")
+        try:
+            max_new = int(max_new) if max_new is not None else 512
+        except (TypeError, ValueError):
+            max_new = 512
+
+        budget = tokenizer_max - max_new - 64
+        return max(256, min(budget, 4096))
+
+    def _truncate_prompt_text(self, prompt: str, gen_kwargs: Optional[Dict[str, Any]] = None) -> str:
+        """Truncate ``prompt`` to a safe input length using the model tokenizer.
+
+        Returns the re-decoded prompt text so downstream pipeline calls don't
+        need to know about tokenizer internals. If anything goes wrong we
+        fall back to returning the original prompt — the caller-side
+        truncation in generate() still protects us.
+        """
+        if self._tokenizer is None or not prompt:
+            return prompt
+        try:
+            max_in = self._safe_max_input_tokens(gen_kwargs)
+            encoded = self._tokenizer(
+                prompt,
+                truncation=True,
+                max_length=max_in,
+                add_special_tokens=False,
+                return_tensors=None,
+            )
+            ids = encoded.get("input_ids") if isinstance(encoded, dict) else encoded["input_ids"]
+            if isinstance(ids, list) and ids and isinstance(ids[0], list):
+                ids = ids[0]
+            if not ids:
+                return prompt
+            return self._tokenizer.decode(ids, skip_special_tokens=True)
+        except Exception as e:
+            logger.debug("Prompt truncation skipped: %s", e)
+            return prompt
+
     def _manual_generate(self, prompt: str, gen_kwargs: Dict[str, Any]) -> Optional[str]:
         if not _torch or self._model is None or self._tokenizer is None:
             return None
@@ -1000,7 +1064,13 @@ class HFLocalProvider:
         try:
             # Apply chat template for instruct models
             formatted_prompt = self._apply_chat_template(prompt)
-            inputs = self._tokenizer(formatted_prompt, return_tensors="pt")
+            max_in = self._safe_max_input_tokens(gen_kwargs)
+            inputs = self._tokenizer(
+                formatted_prompt,
+                return_tensors="pt",
+                truncation=True,
+                max_length=max_in,
+            )
             target_device = None
             if hasattr(self._model, "device"):
                 target_device = self._model.device
@@ -1219,6 +1289,7 @@ class HFLocalProvider:
 
             elif self.task_type == "text-generation":
                 gen_kwargs = self._normalize_generation_kwargs(generation_kwargs)
+                prompt = self._truncate_prompt_text(prompt, gen_kwargs)
 
                 if self._force_manual_generate:
                     return self._generate_with_json_retry(prompt, gen_kwargs)
@@ -1279,6 +1350,7 @@ class HFLocalProvider:
 
             if self.task_type == "text-generation":
                 gen_kwargs = self._normalize_generation_kwargs(generation_kwargs)
+                prompts = [self._truncate_prompt_text(p, gen_kwargs) for p in prompts]
 
                 if self._force_manual_generate:
                     return [self._generate_with_json_retry(p, gen_kwargs) for p in prompts]
