@@ -13,6 +13,9 @@ class Config:
     )
     UPLOAD_FOLDER: str = os.path.join(os.getcwd(), "uploads")
     MAX_CONTENT_LENGTH_IN_BYTES: int = 16 * 1024 * 1024
+    # Flask only enforces the key named MAX_CONTENT_LENGTH; the *_IN_BYTES name
+    # above was never applied, so the upload cap was silently doing nothing.
+    MAX_CONTENT_LENGTH: int = MAX_CONTENT_LENGTH_IN_BYTES
     ALLOWED_EXTENSIONS: set[str] = {"zip"}
 
     OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL") or "http://localhost:11434"
